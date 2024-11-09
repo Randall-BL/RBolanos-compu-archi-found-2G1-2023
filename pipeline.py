@@ -78,20 +78,8 @@ def initialize_pipeline():
 
 def execute_cycle(program, registers, memory, pipeline, program_counter):
     """
-    Simula un ciclo del pipeline, considerando latencias realistas.
-    Parámetros:
-    - program: Lista de instrucciones.
-    - registers: Lista de registros.
-    - memory: Lista que representa la memoria.
-    - pipeline: Diccionario que representa el estado del pipeline.
-    - program_counter: Contador del programa.
-
-    Retorna:
-    - program_counter actualizado.
+    Simula un ciclo del pipeline.
     """
-    # Definir las latencias para cada tipo de operación
-    latencies = {"ADD": 1, "SUB": 1, "MUL": 3, "DIV": 5}
-
     # Write Back (WB)
     if pipeline["WB"]:
         instr = pipeline["WB"]
@@ -101,53 +89,59 @@ def execute_cycle(program, registers, memory, pipeline, program_counter):
             registers[instr["dest"]] = instr["result"]
         elif instr["opcode"] == "MUL":
             registers[instr["dest"]] = instr["result"]
-        elif instr["opcode"] == "DIV":
-            registers[instr["dest"]] = instr["result"]
         print(f"WB - Escribiendo en R{instr['dest']}: {registers[instr['dest']]}")
         pipeline["WB"] = None  # Limpiar la etapa WB
 
     # Memory Access (MEM)
-    if pipeline["MEM"] and pipeline["WB"] is None:
+    if pipeline["MEM"]:
         instr = pipeline["MEM"]
         pipeline["WB"] = instr
         print(f"MEM - Pasando a WB: {instr}")
-        pipeline["MEM"] = None
+        pipeline["MEM"] = None  # Limpiar MEM después de pasar a WB
 
     # Execution (EX)
     if pipeline["EX"]:
         instr = pipeline["EX"]
-        if "latency_remaining" not in instr:
-            instr["latency_remaining"] = latencies.get(instr["opcode"], 1)
-        # Reducir la latencia y verificar si ha terminado la ejecución
-        instr["latency_remaining"] -= 1
-        if instr["latency_remaining"] <= 0 and pipeline["MEM"] is None:
-            instr["result"] = execute_instruction(instr, registers)
-            print(f"EX - Calculando: {instruction_summary(instr, registers)} = {instr['result']}")
-            pipeline["MEM"] = instr
-            print(f"EX - Pasando a MEM: {instr}")
-            pipeline["EX"] = None
+        if instr["opcode"] == "ADD":
+            instr["result"] = registers[instr["src1"]] + registers[instr["src2"]]
+            print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) + R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+        elif instr["opcode"] == "SUB":
+            instr["result"] = registers[instr["src1"]] - registers[instr["src2"]]
+            print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) - R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+        elif instr["opcode"] == "MUL":
+            instr["result"] = registers[instr["src1"]] * registers[instr["src2"]]
+            print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) * R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+        pipeline["MEM"] = instr
+        print(f"EX - Pasando a MEM: {instr}")
+        pipeline["EX"] = None  # Limpiar EX después de pasar a MEM
 
     # Instruction Decode (ID)
-    if pipeline["ID"] and pipeline["EX"] is None:
+    if pipeline["ID"]:
         instr = pipeline["ID"]
         pipeline["EX"] = instr
         print(f"ID - Pasando a EX: {instr}")
-        pipeline["ID"] = None
+        pipeline["ID"] = None  # Limpiar ID después de pasar a EX
 
     # Instruction Fetch (IF)
-    if program_counter < len(program) and pipeline["IF"] is None:
+    if pipeline["IF"] is None and program_counter < len(program):
         pipeline["IF"] = program[program_counter]
+        pipeline["IF"]["delay"] = True  # Marcar con delay para mantenerla en IF por un ciclo
         print(f"IF - Cargando instrucción: {pipeline['IF']}")
         program_counter += 1
 
-    # Mover la instrucción de IF a ID si ID está vacío
-    if pipeline["IF"] and pipeline["ID"] is None:
+    # Mover la instrucción de IF a ID
+    if pipeline["IF"] and "delay" in pipeline["IF"]:
+        print(f"IF - Manteniendo instrucción en IF por un ciclo: {pipeline['IF']}")
+        del pipeline["IF"]["delay"]  # Quitar delay después de un ciclo
+    elif pipeline["IF"] and pipeline["ID"] is None:
         pipeline["ID"] = pipeline["IF"]
         print(f"IF - Pasando a ID: {pipeline['IF']}")
-        pipeline["IF"] = None
+        pipeline["IF"] = None  # Limpiar IF después de pasar a ID
 
+    # Debug del estado actual del pipeline
     print(f"Estado del pipeline: {pipeline}")
     print(f"Registros: {registers}\n")
+
     return program_counter
 
 def execute_instruction(instr, registers):

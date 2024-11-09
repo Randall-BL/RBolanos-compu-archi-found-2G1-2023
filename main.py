@@ -20,13 +20,34 @@ def main():
     # Parámetros de simulación
     visualize_during_simulation = True  # Alternar entre simulación con o sin visualización en tiempo real
 
-    # Simulación con visualización interactiva
-    print("\nIniciando simulación con visualización interactiva...\n")
     if visualize_during_simulation:
-        # Visualización interactiva con botones y ciclos impresos en consola
+        # Simulación con visualización interactiva
+        print("\nIniciando simulación con visualización interactiva...\n")
         visualize_with_pygame(
             program, registers, memory, pipeline, execute_cycle, buttons
         )
+    else:
+        # Simulación segmentada para pruebas
+        print("\nIniciando simulación segmentada para pruebas...\n")
+        run_segmented_simulation(program, registers, memory, pipeline)
+
+def run_segmented_simulation(program, registers, memory, pipeline):
+    """
+    Ejecuta una simulación segmentada (sin interacción gráfica) para pruebas.
+    """
+    program_counter = 0
+    cycles_to_run = 10  # Ciclos a ejecutar para completar el programa
+
+    for cycle in range(cycles_to_run):
+        print(f"\nCiclo {cycle + 1}")
+        program_counter = execute_cycle(program, registers, memory, pipeline, program_counter)
+
+        # Mostrar el estado del pipeline y registros
+        print(f"Pipeline: {pipeline}")
+        print(f"Registros: {registers}")
+
+    print("\n--- Simulación Finalizada ---")
+    print(f"Registros finales: {registers}")
 
 if __name__ == "__main__":
     main()

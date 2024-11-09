@@ -133,32 +133,19 @@ def execute_pipeline_in_thread(program, registers, memory, pipeline, program_cou
     Ejecuta el pipeline en un hilo separado para no bloquear la interfaz gráfica.
     """
     for i in range(6):  # Seis ciclos para que la instrucción pase por todas las etapas
-        # Actualizar la interfaz antes de ejecutar el ciclo para asegurarnos de mostrar el estado de IF inicialmente
-        if i == 0:
-            # Dibujar la instrucción en la etapa IF para el primer ciclo
-            draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time, program_counter)
-            pygame.display.flip()
-            time.sleep(0.5)  # Retraso para asegurar que IF se vea claramente
+        # Dibujar la interfaz después de cada ciclo
+        draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time, program_counter)
+        pygame.display.flip()
 
-        # Ejecutar el ciclo y actualizar el program counter
+        # Ejecutar un ciclo del pipeline
         program_counter = execute_cycle(program, registers, memory, pipeline, program_counter)
 
-        # Asegurarse de limpiar la etapa anterior antes de avanzar
-        if i < len(pipeline) - 1:
-            # A medida que la instrucción se mueve, limpiar la etapa anterior
-            if i == 0:
-                pipeline["IF"] = None
-            elif i == 1:
-                pipeline["ID"] = None
-            elif i == 2:
-                pipeline["EX"] = None
-            elif i == 3:
-                pipeline["MEM"] = None
-
-        # Dibujar la interfaz después de actualizar el pipeline
+        # Mostrar el estado actualizado después de ejecutar el ciclo
         draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time, program_counter)
-        pygame.display.flip()  # Actualizar la pantalla
-        time.sleep(0.5)  # Pausa de 0.5 segundos para visualizar cada etapa
+        pygame.display.flip()
+
+        # Retrasar para visualizar claramente cada ciclo
+        time.sleep(0.5)
 
 def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, buttons):
     """
