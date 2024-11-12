@@ -1,4 +1,5 @@
 import pygame
+from memory_instructions import load_instruction, store_instruction
 
 # Configuración inicial de Pygame
 WIDTH, HEIGHT = 900, 600
@@ -89,12 +90,33 @@ def execute_cycle(program, registers, memory, pipeline, program_counter):
             registers[instr["dest"]] = instr["result"]
         elif instr["opcode"] == "MUL":
             registers[instr["dest"]] = instr["result"]
+        elif instr["opcode"] == "LOAD":
+            registers[instr["dest"]] = instr["result"]  # Escribir el valor de result en el registro de destino
+            print(f"LOAD - Cargando desde memoria[{instr['src1']}] a R{instr['dest']}: {instr['result']}")
+            memory[instr["src1"]] = 0  # La dirección de memoria src1 se pone a 0
+            print(f"LOAD - Memoria[{instr['src1']}] se ha puesto a 0")
+        elif instr["opcode"] == "STORE":
+            registers[instr["src1"]] = 0  # Limpiar el valor en el registro src1 después de almacenar
+            print(f"STORE - Registro R{instr['src1']} se ha puesto a 0")
         print(f"WB - Escribiendo en R{instr['dest']}: {registers[instr['dest']]}")
         pipeline["WB"] = None  # Limpiar la etapa WB
 
     # Memory Access (MEM)
     if pipeline["MEM"]:
         instr = pipeline["MEM"]
+        # En el bloque de MEM para la instrucción LOAD
+
+        if instr["opcode"] == "LOAD":
+            # src1 contiene la dirección de memoria.
+            value = memory[instr["src1"]]  # Obtener el valor almacenado en memory[src1]
+            instr["result"] = value  # Guardar el valor en result
+            print(f"LOAD - Cargando desde memoria[{instr['src1']}] a R{instr['dest']}: {instr['result']}")
+
+        elif instr["opcode"] == "STORE":
+            # Guardar en la dirección en memoria apuntada por `dest` el valor de `src1`
+            address = instr["dest"]  # Aquí cambiamos a `dest` como la dirección
+            memory[address] = registers[instr["src1"]]
+            print(f"STORE - Guardando R{instr['src1']}({registers[instr['src1']]}) en memoria[{address}]")
         pipeline["WB"] = instr
         print(f"MEM - Pasando a WB: {instr}")
         pipeline["MEM"] = None  # Limpiar MEM después de pasar a WB
