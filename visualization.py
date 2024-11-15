@@ -32,10 +32,13 @@ def initialize_pygame():
 
 def draw_buttons(screen, font, buttons):
     """
-    Dibuja los botones en la parte inferior de la ventana y asigna rectángulos.
+    Dibuja los botones distribuidos en múltiples filas.
     """
-    y = WINDOW_HEIGHT - 80
-    x_start = 20
+    x_start = 20  # Coordenada X inicial de los botones
+    y = WINDOW_HEIGHT - 150  # Coordenada Y inicial de los botones (un poco más arriba)
+    max_buttons_per_row = 5  # Número máximo de botones por fila (ajústalo según el espacio)
+    buttons_in_row = 0  # Contador de botones en la fila actual
+
     for button in buttons:
         # Crear el rectángulo del botón
         rect = pygame.Rect(x_start, y, BUTTON_WIDTH, BUTTON_HEIGHT)
@@ -48,7 +51,16 @@ def draw_buttons(screen, font, buttons):
         pygame.draw.rect(screen, color, rect)
         text = font.render(button["label"], True, BUTTON_TEXT_COLOR)
         screen.blit(text, (x_start + 20, y + 15))
+
+        # Ajustar la posición para el próximo botón
         x_start += BUTTON_WIDTH + BUTTON_SPACING
+        buttons_in_row += 1
+
+        # Si alcanzamos el máximo por fila, pasar a la siguiente fila
+        if buttons_in_row >= max_buttons_per_row:
+            x_start = 20  # Reiniciar X para la nueva fila
+            y += BUTTON_HEIGHT + 10  # Mover hacia abajo (nueva fila)
+            buttons_in_row = 0
 
 def draw_header(screen, font, cycle, start_time, program_counter):
     """

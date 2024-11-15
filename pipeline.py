@@ -90,33 +90,32 @@ def execute_cycle(program, registers, memory, pipeline, program_counter):
             registers[instr["dest"]] = instr["result"]
         elif instr["opcode"] == "MUL":
             registers[instr["dest"]] = instr["result"]
+        elif instr["opcode"] == "DIV":
+            registers[instr["dest"]] = instr["result"]
+        elif instr["opcode"] == "MOD":
+            registers[instr["dest"]] = instr["result"]
+            print(f"WB - Escribiendo en R{instr['dest']}: {registers[instr['dest']]}")
         elif instr["opcode"] == "LOAD":
-            registers[instr["dest"]] = instr["result"]  # Escribir el valor de result en el registro de destino
-            print(f"LOAD - Cargando desde memoria[{instr['src1']}] a R{instr['dest']}: {instr['result']}")
-            memory[instr["src1"]] = 0  # La dirección de memoria src1 se pone a 0
-            print(f"LOAD - Memoria[{instr['src1']}] se ha puesto a 0")
+            registers[instr["dest"]] = instr["result"]
+            print(f"WB - Cargando desde memoria[{instr['src1']}] a R{instr['dest']}: {instr['result']}")
         elif instr["opcode"] == "STORE":
-            registers[instr["src1"]] = 0  # Limpiar el valor en el registro src1 después de almacenar
-            print(f"STORE - Registro R{instr['src1']} se ha puesto a 0")
-        print(f"WB - Escribiendo en R{instr['dest']}: {registers[instr['dest']]}")
+            print(f"WB - STORE completado, no hay cambios en registros.")
         pipeline["WB"] = None  # Limpiar la etapa WB
 
     # Memory Access (MEM)
     if pipeline["MEM"]:
         instr = pipeline["MEM"]
-        # En el bloque de MEM para la instrucción LOAD
-
         if instr["opcode"] == "LOAD":
             # src1 contiene la dirección de memoria.
             value = memory[instr["src1"]]  # Obtener el valor almacenado en memory[src1]
             instr["result"] = value  # Guardar el valor en result
+            memory[instr["src1"]] = 0  # La dirección de memoria src1 se pone a 0
             print(f"LOAD - Cargando desde memoria[{instr['src1']}] a R{instr['dest']}: {instr['result']}")
-
+            print(f"LOAD - Memoria[{instr['src1']}] se ha puesto a 0")
         elif instr["opcode"] == "STORE":
-            # Guardar en la dirección en memoria apuntada por `dest` el valor de `src1`
-            address = instr["dest"]  # Aquí cambiamos a `dest` como la dirección
-            memory[address] = registers[instr["src1"]]
-            print(f"STORE - Guardando R{instr['src1']}({registers[instr['src1']]}) en memoria[{address}]")
+            # Guardar el valor de src1 en la memoria en dest
+            memory[instr["dest"]] = registers[instr["src1"]]
+            print(f"MEM - Guardando R{instr['src1']}({registers[instr['src1']]}) en memoria[{instr['dest']}]")
         pipeline["WB"] = instr
         print(f"MEM - Pasando a WB: {instr}")
         pipeline["MEM"] = None  # Limpiar MEM después de pasar a WB
@@ -133,6 +132,20 @@ def execute_cycle(program, registers, memory, pipeline, program_counter):
         elif instr["opcode"] == "MUL":
             instr["result"] = registers[instr["src1"]] * registers[instr["src2"]]
             print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) * R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+        elif instr["opcode"] == "DIV":
+            if registers[instr["src2"]] != 0:
+                instr["result"] = registers[instr["src1"]] // registers[instr["src2"]]
+                print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) / R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+            else:
+                instr["result"] = 0
+                print(f"EX - División por cero en DIV: resultado = 0")
+        elif instr["opcode"] == "MOD":
+            if registers[instr["src2"]] != 0:
+                instr["result"] = registers[instr["src1"]] % registers[instr["src2"]]
+                print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) % R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+            else:
+                instr["result"] = 0
+                print(f"EX - División por cero en MOD: resultado = 0")
         pipeline["MEM"] = instr
         print(f"EX - Pasando a MEM: {instr}")
         pipeline["EX"] = None  # Limpiar EX después de pasar a MEM

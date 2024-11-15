@@ -15,6 +15,8 @@ def main():
         {"label": "ADD", "instruction": {"opcode": "ADD", "dest": 1, "src1": 2, "src2": 3}, "hover": False},
         {"label": "SUB", "instruction": {"opcode": "SUB", "dest": 4, "src1": 5, "src2": 6}, "hover": False},
         {"label": "MUL", "instruction": {"opcode": "MUL", "dest": 7, "src1": 0, "src2": 1}, "hover": False},
+        {"label": "DIV", "instruction": {"opcode": "DIV", "dest": 2, "src1": 5, "src2": 6}, "hover": False},  # Botón para DIV
+        {"label": "MOD", "instruction": {"opcode": "MOD", "dest": 3, "src1": 5, "src2": 6}, "hover": False},  # Botón para MOD
         {"label": "STORE", "instruction": {"opcode": "STORE", "dest": 3, "src1": 4}, "hover": False},
         {"label": "LOAD", "instruction": {"opcode": "LOAD", "dest": 7, "src1": 3}, "hover": False},
     ]
