@@ -62,15 +62,15 @@ def draw_buttons(screen, font, buttons):
             y += BUTTON_HEIGHT + 10  # Mover hacia abajo (nueva fila)
             buttons_in_row = 0
 
-def draw_header(screen, font, cycle, start_time, program_counter):
+def draw_header(screen, font, cycle, start_time, registers):
     """
-    Dibuja el encabezado con ciclo, tiempo transcurrido y PC.
+    Dibuja el encabezado con ciclo, tiempo transcurrido y PC (R8).
     """
     current_time = time.time() - start_time
     header_texts = [
         f"Ciclo: {cycle}",
         f"Tiempo: {current_time:.2f} segundos",
-        f"PC: {program_counter}",
+        f"PC (R8): {registers[8]}"  # Obtener el valor del registro R8
     ]
 
     y = 10
@@ -126,7 +126,7 @@ def draw_memory(screen, font, memory, start=0, end=8):
         render = font.render(text, True, FONT_COLOR)
         screen.blit(render, (x_start + (i % 4) * spacing_x, y_start + (i // 4) * spacing_y))
 
-def draw_interface(screen, font, pipeline, registers, memory, buttons, cycle, start_time, program_counter):
+def draw_interface(screen, font, pipeline, registers, memory, buttons, cycle, start_time):
     """
     Dibuja todos los elementos en la interfaz gráfica.
     """
@@ -134,7 +134,7 @@ def draw_interface(screen, font, pipeline, registers, memory, buttons, cycle, st
     screen.fill(BG_COLOR)
 
     # Dibujar todos los elementos visuales
-    draw_header(screen, font, cycle, start_time, program_counter)
+    draw_header(screen, font, cycle, start_time, registers)  # Obtener PC desde registers[8]
     draw_pipeline(screen, font, pipeline)
     draw_registers(screen, font, registers)
     draw_memory(screen, font, memory)
@@ -146,14 +146,14 @@ def execute_pipeline_in_thread(program, registers, memory, pipeline, program_cou
     """
     for i in range(6):  # Seis ciclos para que la instrucción pase por todas las etapas
         # Dibujar la interfaz después de cada ciclo
-        draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time, program_counter)
+        draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
         pygame.display.flip()
 
         # Ejecutar un ciclo del pipeline
         program_counter = execute_cycle(program, registers, memory, pipeline, program_counter)
 
         # Mostrar el estado actualizado después de ejecutar el ciclo
-        draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time, program_counter)
+        draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
         pygame.display.flip()
 
         # Retrasar para visualizar claramente cada ciclo
@@ -199,7 +199,7 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
                 button["hover"] = button["rect"].collidepoint(mouse_pos)
 
         # Dibujar la interfaz completa después de los eventos del ciclo
-        draw_interface(screen, font, pipeline, registers, memory, buttons, cycle, start_time, program_counter)
+        draw_interface(screen, font, pipeline, registers, memory, buttons, cycle, start_time)
         pygame.display.flip()  # Refrescar la pantalla
         clock.tick(60)  # Limitar la actualización a 60 FPS
 

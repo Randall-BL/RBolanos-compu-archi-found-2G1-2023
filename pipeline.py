@@ -84,15 +84,7 @@ def execute_cycle(program, registers, memory, pipeline, program_counter):
     # Write Back (WB)
     if pipeline["WB"]:
         instr = pipeline["WB"]
-        if instr["opcode"] == "ADD":
-            registers[instr["dest"]] = instr["result"]
-        elif instr["opcode"] == "SUB":
-            registers[instr["dest"]] = instr["result"]
-        elif instr["opcode"] == "MUL":
-            registers[instr["dest"]] = instr["result"]
-        elif instr["opcode"] == "DIV":
-            registers[instr["dest"]] = instr["result"]
-        elif instr["opcode"] == "MOD":
+        if instr["opcode"] in ["ADD", "SUB", "MUL", "DIV", "MOD"]:
             registers[instr["dest"]] = instr["result"]
             print(f"WB - Escribiendo en R{instr['dest']}: {registers[instr['dest']]}")
         elif instr["opcode"] == "LOAD":
@@ -100,22 +92,22 @@ def execute_cycle(program, registers, memory, pipeline, program_counter):
             print(f"WB - Cargando desde memoria[{instr['src1']}] a R{instr['dest']}: {instr['result']}")
         elif instr["opcode"] == "STORE":
             print(f"WB - STORE completado, no hay cambios en registros.")
+        elif instr["opcode"] == "SWAP":
+            print(f"WB - SWAP completado entre R{instr['dest']} y R{instr['src1']}.")
         pipeline["WB"] = None  # Limpiar la etapa WB
 
     # Memory Access (MEM)
     if pipeline["MEM"]:
         instr = pipeline["MEM"]
         if instr["opcode"] == "LOAD":
-            # src1 contiene la dirección de memoria.
-            value = memory[instr["src1"]]  # Obtener el valor almacenado en memory[src1]
-            instr["result"] = value  # Guardar el valor en result
-            memory[instr["src1"]] = 0  # La dirección de memoria src1 se pone a 0
+            value = memory[instr["src1"]]  # Obtener el valor en memoria
+            instr["result"] = value
+            memory[instr["src1"]] = 0  # Limpiar memoria después de cargar
             print(f"LOAD - Cargando desde memoria[{instr['src1']}] a R{instr['dest']}: {instr['result']}")
             print(f"LOAD - Memoria[{instr['src1']}] se ha puesto a 0")
         elif instr["opcode"] == "STORE":
-            # Guardar el valor de src1 en la memoria en dest
-            memory[instr["dest"]] = registers[instr["src1"]]
-            print(f"MEM - Guardando R{instr['src1']}({registers[instr['src1']]}) en memoria[{instr['dest']}]")
+            memory[instr["dest"]] = registers[instr["src1"]]  # Guardar en memoria
+            print(f"STORE - Guardando R{instr['src1']}({registers[instr['src1']]}) en memoria[{instr['dest']}]")
         pipeline["WB"] = instr
         print(f"MEM - Pasando a WB: {instr}")
         pipeline["MEM"] = None  # Limpiar MEM después de pasar a WB
@@ -133,50 +125,56 @@ def execute_cycle(program, registers, memory, pipeline, program_counter):
             instr["result"] = registers[instr["src1"]] * registers[instr["src2"]]
             print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) * R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
         elif instr["opcode"] == "DIV":
-            if registers[instr["src2"]] != 0:
-                instr["result"] = registers[instr["src1"]] // registers[instr["src2"]]
-                print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) / R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
-            else:
-                instr["result"] = 0
-                print(f"EX - División por cero en DIV: resultado = 0")
+            instr["result"] = registers[instr["src1"]] // registers[instr["src2"]] if registers[instr["src2"]] != 0 else 0
+            print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) / R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
         elif instr["opcode"] == "MOD":
-            if registers[instr["src2"]] != 0:
-                instr["result"] = registers[instr["src1"]] % registers[instr["src2"]]
-                print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) % R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+            instr["result"] = registers[instr["src1"]] % registers[instr["src2"]] if registers[instr["src2"]] != 0 else 0
+            print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) % R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+        elif instr["opcode"] == "BNE":
+            if registers[instr["src1"]] != registers[instr["src2"]]:
+                program_counter += instr["offset"]
+                print(f"EX - BNE tomado, salto a la dirección {program_counter}.")
             else:
-                instr["result"] = 0
-                print(f"EX - División por cero en MOD: resultado = 0")
+                print("EX - BNE no tomado.")
+        elif instr["opcode"] == "BEQ":
+            if registers[instr["src1"]] == registers[instr["src2"]]:
+                program_counter += instr["offset"]
+                print(f"EX - BEQ tomado, salto a la dirección {program_counter}.")
+            else:
+                print("EX - BEQ no tomado.")
+        elif instr["opcode"] == "SWAP":
+            registers[instr["dest"]], registers[instr["src1"]] = registers[instr["src1"]], registers[instr["dest"]]
+            print(f"EX - SWAP: R{instr['dest']}({registers[instr['dest']]}) <-> R{instr['src1']}({registers[instr['src1']]})")
         pipeline["MEM"] = instr
         print(f"EX - Pasando a MEM: {instr}")
-        pipeline["EX"] = None  # Limpiar EX después de pasar a MEM
+        pipeline["EX"] = None  # Limpiar EX
 
     # Instruction Decode (ID)
     if pipeline["ID"]:
         instr = pipeline["ID"]
         pipeline["EX"] = instr
         print(f"ID - Pasando a EX: {instr}")
-        pipeline["ID"] = None  # Limpiar ID después de pasar a EX
+        pipeline["ID"] = None  # Limpiar ID
 
     # Instruction Fetch (IF)
     if pipeline["IF"] is None and program_counter < len(program):
         pipeline["IF"] = program[program_counter]
-        pipeline["IF"]["delay"] = True  # Marcar con delay para mantenerla en IF por un ciclo
+        pipeline["IF"]["delay"] = True  # Mantener en IF un ciclo
         print(f"IF - Cargando instrucción: {pipeline['IF']}")
         program_counter += 1
 
-    # Mover la instrucción de IF a ID
+    # Registrar el PC en un registro especial
+    registers[8] = program_counter
+
     if pipeline["IF"] and "delay" in pipeline["IF"]:
-        print(f"IF - Manteniendo instrucción en IF por un ciclo: {pipeline['IF']}")
-        del pipeline["IF"]["delay"]  # Quitar delay después de un ciclo
+        del pipeline["IF"]["delay"]
     elif pipeline["IF"] and pipeline["ID"] is None:
         pipeline["ID"] = pipeline["IF"]
-        print(f"IF - Pasando a ID: {pipeline['IF']}")
-        pipeline["IF"] = None  # Limpiar IF después de pasar a ID
+        pipeline["IF"] = None
 
-    # Debug del estado actual del pipeline
     print(f"Estado del pipeline: {pipeline}")
     print(f"Registros: {registers}\n")
-
+    print(f"Program Counter (PC): {program_counter}")
     return program_counter
 
 def execute_instruction(instr, registers):

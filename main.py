@@ -19,6 +19,9 @@ def main():
         {"label": "MOD", "instruction": {"opcode": "MOD", "dest": 3, "src1": 5, "src2": 6}, "hover": False},  # Botón para MOD
         {"label": "STORE", "instruction": {"opcode": "STORE", "dest": 3, "src1": 4}, "hover": False},
         {"label": "LOAD", "instruction": {"opcode": "LOAD", "dest": 7, "src1": 3}, "hover": False},
+        {"label": "SWAP", "instruction": {"opcode": "SWAP", "dest": 1, "src1": 2}, "hover": False},  # Botón para SWAP
+        {"label": "BNE", "instruction": {"opcode": "BNE", "src1": 1, "src2": 2, "offset": 2}, "hover": False},  # Botón para BNE
+        {"label": "BEQ", "instruction": {"opcode": "BEQ", "src1": 3, "src2": 4, "offset": 4}, "hover": False},  # Botón para BEQ
     ]
 
     # Parámetros de simulación
