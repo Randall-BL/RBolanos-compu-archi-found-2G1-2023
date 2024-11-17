@@ -20,6 +20,8 @@ BUTTON_WIDTH = 150
 BUTTON_HEIGHT = 50
 BUTTON_SPACING = 20
 
+selected_instruction = None  # Inicialmente ninguna instruccion esta seleccionada
+
 def initialize_pygame():
     """
     Inicializa Pygame y configura la ventana y fuente.
@@ -32,7 +34,7 @@ def initialize_pygame():
 
 def draw_buttons(screen, font, buttons):
     """
-    Dibuja los botones distribuidos en múltiples filas.
+    Dibuja los botones distribuidos en múltiples filas y asegura que cada botón tenga un rectángulo asignado.
     """
     x_start = 20  # Coordenada X inicial de los botones
     y = WINDOW_HEIGHT - 150  # Coordenada Y inicial de los botones (un poco más arriba)
@@ -40,7 +42,7 @@ def draw_buttons(screen, font, buttons):
     buttons_in_row = 0  # Contador de botones en la fila actual
 
     for button in buttons:
-        # Crear el rectángulo del botón
+        # Crear el rectángulo del botón si no existe
         rect = pygame.Rect(x_start, y, BUTTON_WIDTH, BUTTON_HEIGHT)
         button["rect"] = rect
 
@@ -61,6 +63,7 @@ def draw_buttons(screen, font, buttons):
             x_start = 20  # Reiniciar X para la nueva fila
             y += BUTTON_HEIGHT + 10  # Mover hacia abajo (nueva fila)
             buttons_in_row = 0
+
 
 def draw_header(screen, font, cycle, start_time, registers):
     """
@@ -159,16 +162,152 @@ def execute_pipeline_in_thread(program, registers, memory, pipeline, program_cou
         # Retrasar para visualizar claramente cada ciclo
         time.sleep(0.5)
 
+def is_pipeline_empty(pipeline):
+    return all(stage is None for stage in pipeline.values())
+
+def execute_pipeline_step(program, registers, memory, pipeline, program_counter, current_stage):
+    """
+    Ejecuta solo una etapa específica del pipeline para la instrucción dada.
+    """
+    stages = ["IF", "ID", "EX", "MEM", "WB"]
+    if current_stage < len(stages):
+        stage = stages[current_stage]
+        print(f"\n---- Ejecutando etapa: {stage} ----")
+
+        # Lógica de cada etapa según el pipeline
+        if stage == "IF":
+                # Instruction Fetch (IF)
+            if pipeline["IF"] is None and program_counter < len(program):
+                pipeline["IF"] = program[program_counter]
+                pipeline["IF"]["delay"] = True  # Mantener en IF un ciclo
+                print(f"IF - Cargando instrucción: {pipeline['IF']}")
+                program_counter += 1
+
+            # Registrar el PC en un registro especial
+            registers[8] = program_counter
+
+            if pipeline["IF"] and "delay" in pipeline["IF"]:
+                del pipeline["IF"]["delay"]
+            elif pipeline["IF"] and pipeline["ID"] is None:
+                pipeline["ID"] = pipeline["IF"]
+                pipeline["IF"] = None
+
+        elif stage == "ID":
+            if pipeline["ID"]:
+                instr = pipeline["ID"]
+                pipeline["EX"] = instr
+                print(f"ID - Pasando a EX: {instr}")
+                pipeline["ID"] = None  # Limpiar ID
+
+        elif stage == "EX":
+            if pipeline["EX"]:
+                instr = pipeline["EX"]
+                if instr["opcode"] == "ADD":
+                    instr["result"] = registers[instr["src1"]] + registers[instr["src2"]]
+                    print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) + R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+                elif instr["opcode"] == "SUB":
+                    instr["result"] = registers[instr["src1"]] - registers[instr["src2"]]
+                    print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) - R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+                elif instr["opcode"] == "MUL":
+                    instr["result"] = registers[instr["src1"]] * registers[instr["src2"]]
+                    print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) * R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+                elif instr["opcode"] == "DIV":
+                    instr["result"] = registers[instr["src1"]] // registers[instr["src2"]] if registers[instr["src2"]] != 0 else 0
+                    print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) / R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+                elif instr["opcode"] == "MOD":
+                    instr["result"] = registers[instr["src1"]] % registers[instr["src2"]] if registers[instr["src2"]] != 0 else 0
+                    print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) % R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
+                elif instr["opcode"] == "BNE":
+                    if registers[instr["src1"]] != registers[instr["src2"]]:
+                        program_counter += instr["offset"]
+                        print(f"EX - BNE tomado, salto a la dirección {program_counter}.")
+                    else:
+                        print("EX - BNE no tomado.")
+                elif instr["opcode"] == "BEQ":
+                    if registers[instr["src1"]] == registers[instr["src2"]]:
+                        program_counter += instr["offset"]
+                        print(f"EX - BEQ tomado, salto a la dirección {program_counter}.")
+                    else:
+                        print("EX - BEQ no tomado.")
+                elif instr["opcode"] == "SWAP":
+                    registers[instr["dest"]], registers[instr["src1"]] = registers[instr["src1"]], registers[instr["dest"]]
+                    print(f"EX - SWAP: R{instr['dest']}({registers[instr['dest']]}) <-> R{instr['src1']}({registers[instr['src1']]})")
+                pipeline["MEM"] = instr
+                print(f"EX - Pasando a MEM: {instr}")
+                pipeline["EX"] = None  # Limpiar EX
+
+        elif stage == "MEM":
+            if pipeline["MEM"]:
+                instr = pipeline["MEM"]
+                if instr["opcode"] == "LOAD":
+                    value = memory[instr["src1"]]  # Obtener el valor en memoria
+                    instr["result"] = value
+                    memory[instr["src1"]] = 0  # Limpiar memoria después de cargar
+                    print(f"LOAD - Cargando desde memoria[{instr['src1']}] a R{instr['dest']}: {instr['result']}")
+                    print(f"LOAD - Memoria[{instr['src1']}] se ha puesto a 0")
+                elif instr["opcode"] == "STORE":
+                    memory[instr["dest"]] = registers[instr["src1"]]  # Guardar en memoria
+                    print(f"STORE - Guardando R{instr['src1']}({registers[instr['src1']]}) en memoria[{instr['dest']}]")
+                pipeline["WB"] = instr
+                print(f"MEM - Pasando a WB: {instr}")
+                pipeline["MEM"] = None  # Limpiar MEM después de pasar a WB
+
+        elif stage == "WB":
+            if pipeline["WB"]:
+                instr = pipeline["WB"]
+                if instr["opcode"] in ["ADD", "SUB", "MUL", "DIV", "MOD"]:
+                    registers[instr["dest"]] = instr["result"]
+                    print(f"WB - Escribiendo en R{instr['dest']}: {registers[instr['dest']]}")
+                elif instr["opcode"] == "LOAD":
+                    registers[instr["dest"]] = instr["result"]
+                    print(f"WB - Cargando desde memoria[{instr['src1']}] a R{instr['dest']}: {instr['result']}")
+                elif instr["opcode"] == "STORE":
+                    print(f"WB - STORE completado, no hay cambios en registros.")
+                elif instr["opcode"] == "SWAP":
+                    print(f"WB - SWAP completado entre R{instr['dest']} y R{instr['src1']}.")
+                pipeline["WB"] = None  # Limpiar la etapa WB
+
+        # Mostrar estado actual del pipeline
+        print_pipeline_state(pipeline, registers, memory, program_counter)
+    else:
+        print("\n--- Todas las etapas completadas ---")
+        print_pipeline_state(pipeline, registers, memory, program_counter)
+
+    if is_pipeline_empty(pipeline) and program_counter >= len(program):
+        print("\n--- Pipeline vacío y programa completado. ---")
+        return program_counter
+
+def print_pipeline_state(pipeline, registers, memory, program_counter):
+    """
+    Muestra el estado actual del pipeline.
+    """
+    print("\n--- Estado actual del pipeline ---")
+    for stage, instr in pipeline.items():
+        print(f"{stage}: {instr}")
+    print(f"Estado del pipeline: {pipeline}")
+    print(f"Registros: {registers}\n")
+    print(f"Program Counter (PC): {program_counter}")
+
+
 def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, buttons):
-    """
-    Visualiza el estado del procesador con Pygame y maneja botones.
-    """
+    global selected_instruction  # Variable global para rastrear la instrucción seleccionada
+
+    # Añadir botones "Ejecutar" y "Step-by-Step" al final de la lista de botones
+    buttons.append({"label": "Ejecutar", "instruction": None, "rect": None, "hover": False})
+    buttons.append({"label": "Step-by-Step", "instruction": None, "rect": None, "hover": False})
+
     screen, font = initialize_pygame()
     clock = pygame.time.Clock()
 
     program_counter = 0
     cycle = 1
     start_time = time.time()
+
+    current_stage = 0  # Etapa actual del pipeline (0-4)
+    stages = ["IF", "ID", "EX", "MEM", "WB"]  # Etapas del pipeline
+
+    # Dibujar los botones iniciales para asignar los rectángulos
+    draw_buttons(screen, font, buttons)
 
     running = True
     while running:
@@ -180,18 +319,39 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
                 # Verificar si se presionó un botón
                 for button in buttons:
                     if button["rect"].collidepoint(mouse_pos):
-                        selected_instruction = button["instruction"]
-                        print(f"Ejecutando instrucción: {selected_instruction}")
-
-                        # Crear un hilo para ejecutar el pipeline sin bloquear la UI
-                        pipeline_thread = threading.Thread(
-                            target=execute_pipeline_in_thread,
-                            args=(
-                                [selected_instruction], registers, memory, pipeline, program_counter,
-                                execute_cycle, screen, font, buttons, cycle, start_time
-                            )
-                        )
-                        pipeline_thread.start()
+                        if button["label"] == "Ejecutar":
+                            if selected_instruction:
+                                print(f"Ejecutando instrucción completa: {selected_instruction}")
+                                # Ejecutar toda la instrucción usando execute_cycle
+                                execute_pipeline_in_thread(
+                                    [selected_instruction], registers, memory, pipeline, program_counter,
+                                    execute_cycle, screen, font, buttons, cycle, start_time
+                                )
+                                selected_instruction = None  # Resetear después de ejecutar
+                            else:
+                                print("Primero selecciona una instrucción")
+                        elif button["label"] == "Step-by-Step":
+                            if selected_instruction:
+                                print(f"Ejecutando etapa {current_stage + 1} de la instrucción: {selected_instruction}")
+                                program_counter = execute_pipeline_step(
+                                    [selected_instruction], registers, memory, pipeline, program_counter, current_stage
+                                )
+                                current_stage += 1
+                                if current_stage >= 5:  # Si llegamos a la última etapa, reiniciar
+                                    print("Instrucción completada.")
+                                    current_stage = 0
+                                    selected_instruction = None
+                                    if is_pipeline_empty(pipeline):
+                                        print("--- Pipeline completamente vacío. Reinicio completo. ---")
+                                        program_counter = 0
+                                        pipeline = {stage: None for stage in stages}  # Reiniciar pipeline
+                            else:
+                                print("Primero selecciona una instrucción para Step-by-Step")
+                        else:
+                            # Seleccionar instrucción (si no es un botón especial)
+                            selected_instruction = button["instruction"]
+                            current_stage = 0  # Reiniciar el contador de etapas
+                            print(f"Instrucción seleccionada: {selected_instruction}")
 
         # Actualizar el estado de los botones para el efecto de hover
         for button in buttons:
@@ -204,3 +364,5 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
         clock.tick(60)  # Limitar la actualización a 60 FPS
 
     pygame.quit()
+
+
