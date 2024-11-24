@@ -3,7 +3,7 @@ import threading
 import time
 
 # Configuración de la ventana
-WINDOW_WIDTH, WINDOW_HEIGHT = 900, 700
+WINDOW_WIDTH, WINDOW_HEIGHT = 900, 620
 BG_COLOR = (30, 30, 30)  # Fondo gris oscuro
 FONT_COLOR = (255, 255, 255)  # Texto blanco
 FONT_SIZE = 24
@@ -27,7 +27,7 @@ def initialize_pygame():
     Inicializa Pygame y configura la ventana y fuente.
     """
     pygame.init()
-    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Simulación del Procesador")
     font = pygame.font.Font(None, FONT_SIZE)
     return screen, font
@@ -289,6 +289,7 @@ def print_pipeline_state(pipeline, registers, memory, program_counter):
     print(f"Program Counter (PC): {program_counter}")
 
 
+
 def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, buttons):
     global selected_instruction  # Variable global para rastrear la instrucción seleccionada
 
@@ -308,7 +309,7 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
 
     # Dibujar los botones iniciales para asignar los rectángulos
     draw_buttons(screen, font, buttons)
-
+    
     running = True
     while running:
         mouse_pos = pygame.mouse.get_pos()
@@ -352,6 +353,7 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
                             selected_instruction = button["instruction"]
                             current_stage = 0  # Reiniciar el contador de etapas
                             print(f"Instrucción seleccionada: {selected_instruction}")
+
 
         # Actualizar el estado de los botones para el efecto de hover
         for button in buttons:

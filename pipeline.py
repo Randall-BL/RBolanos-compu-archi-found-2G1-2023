@@ -1,6 +1,6 @@
 import pygame
 from memory_instructions import load_instruction, store_instruction
-
+#pipeline.py
 # Configuración inicial de Pygame
 WIDTH, HEIGHT = 900, 600
 BG_COLOR = (30, 30, 30)  # Fondo gris oscuro
@@ -15,7 +15,7 @@ MEMORY_START_Y = 400
 def initialize_pygame():
     """Inicializa Pygame y retorna la ventana y la fuente."""
     pygame.init()
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
     pygame.display.set_caption("Simulación del Procesador")
     font = pygame.font.Font(None, FONT_SIZE)
     return screen, font
