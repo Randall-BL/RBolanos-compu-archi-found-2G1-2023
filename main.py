@@ -1,3 +1,4 @@
+from hazard_unit import Hazard_Unit
 from registers import initialize_registers, initialize_memory
 from pipeline import initialize_pipeline, execute_cycle
 from instructions import program

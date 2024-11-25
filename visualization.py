@@ -3,6 +3,8 @@ import threading
 import time
 import threading
 
+from hazard_unit import Hazard_Unit
+
 # visualization.py
 # Configuración de la ventana
 WINDOW_WIDTH, WINDOW_HEIGHT = 900, 620
@@ -16,6 +18,12 @@ INACTIVE_COLOR = (100, 100, 100)  # Gris para etapas vacías
 BUTTON_COLOR = (100, 100, 255)
 BUTTON_HOVER_COLOR = (150, 150, 255)
 BUTTON_TEXT_COLOR = (255, 255, 255)
+
+# Constantes del tamaño de los botones
+MODE_BUTTON_WIDTH = 200
+MODE_BUTTON_HEIGHT = 30
+MODE_BUTTON_COLOR = (100, 100, 255)
+MODE_BUTTON_HOVER_COLOR = (150, 150, 255)
 
 # Dimensiones del botón
 BUTTON_WIDTH = 150
@@ -66,6 +74,23 @@ def draw_buttons(screen, font, buttons):
             y += BUTTON_HEIGHT + 10  # Mover hacia abajo (nueva fila)
             buttons_in_row = 0
 
+def draw_mode_buttons(screen, font, mode_buttons, current_mode):
+    """
+    Dibuja los botones de modo del procesador
+    """
+    for btn in mode_buttons:
+        # Determinar el color del botón
+        color = MODE_BUTTON_HOVER_COLOR if btn["hover"] else MODE_BUTTON_COLOR
+        if btn["label"] == current_mode:
+            color = (50, 200, 50)  # Verde para el modo activo
+        
+        # Dibujar el botón
+        pygame.draw.rect(screen, color, btn["rect"])
+        
+        # Dibujar el texto del botón
+        text = font.render(btn["label"], True, BUTTON_TEXT_COLOR)
+        text_rect = text.get_rect(center=btn["rect"].center)
+        screen.blit(text, text_rect)
 
 def draw_header(screen, font, cycle, start_time, registers):
     """
@@ -164,29 +189,37 @@ def execute_pipeline_in_thread(program, registers, memory, pipeline, program_cou
         # Retrasar para visualizar claramente cada ciclo
         time.sleep(0.5)
 
-def execute_pipeline_completa(program, registers, memory, pipeline, program_counter, execute_cycle, screen, font, buttons, cycle, start_time,num_instrucciones):
+def execute_pipeline_completa(program, registers, memory, pipeline, program_counter, execute_cycle, screen, font, buttons, cycle, start_time, num_instrucciones, hazard_unit=None):
     """
     Ejecuta el pipeline de forma segmentada, permitiendo múltiples instrucciones simultáneas.
     """
     def run_pipeline():
         nonlocal program_counter
-        # Calculamos los ciclos necesarios basados en el número de instrucciones
-        # Para N instrucciones necesitamos N + 4 ciclos
-        total_cycles = len(program) + 4 + num_instrucciones # Fórmula: num_instrucciones + 4
+        total_cycles = len(program) + 4 + num_instrucciones
         
         print(f"\nIniciando ejecución segmentada con {len(program)} instrucciones")
         print(f"Ciclos totales necesarios: {total_cycles}")
+        print(f"Modo de ejecución: {'Con unidad de riesgos' if hazard_unit else 'Básico'}")
         
-        # Ejecutar hasta que todas las instrucciones hayan terminado
         for i in range(total_cycles):
             print(f"\nCiclo global {i + 1} de {total_cycles}")
             
             # Actualizar la interfaz
             draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
+            
+            # Mostrar estadísticas de la unidad de riesgos si está activa
+            if hazard_unit:
+                stats = hazard_unit.get_statistics()
+                y_pos = 180
+                for stat_name, value in stats.items():
+                    text = font.render(f"{stat_name}: {value}", True, FONT_COLOR)
+                    screen.blit(text, (WINDOW_WIDTH - 200, y_pos))
+                    y_pos += 25
+            
             pygame.display.flip()
 
-            # Ejecutar un ciclo del pipeline
-            program_counter = execute_cycle(program, registers, memory, pipeline, program_counter)
+            # Ejecutar un ciclo del pipeline con la unidad de riesgos
+            program_counter = execute_cycle(program, registers, memory, pipeline, program_counter, hazard_unit)
             
             # Mostrar estado actual del pipeline
             print("Estado del pipeline:")
@@ -195,9 +228,18 @@ def execute_pipeline_completa(program, registers, memory, pipeline, program_coun
             
             # Actualizar la interfaz después del ciclo
             draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
+            
+            # Mostrar estadísticas actualizadas
+            if hazard_unit:
+                stats = hazard_unit.get_statistics()
+                y_pos = 180
+                for stat_name, value in stats.items():
+                    text = font.render(f"{stat_name}: {value}", True, FONT_COLOR)
+                    screen.blit(text, (WINDOW_WIDTH - 200, y_pos))
+                    y_pos += 25
+            
             pygame.display.flip()
             
-            # Verificar si el pipeline está completamente vacío
             if is_pipeline_empty(pipeline) and i >= len(program):
                 print("Pipeline vacío y todas las instrucciones completadas")
                 break
@@ -205,8 +247,11 @@ def execute_pipeline_completa(program, registers, memory, pipeline, program_coun
             time.sleep(0.5)
 
         print(f"\nEjecución segmentada completada después de {total_cycles} ciclos")
+        if hazard_unit:
+            print("Estadísticas finales de la unidad de riesgos:")
+            for stat_name, value in hazard_unit.get_statistics().items():
+                print(f"{stat_name}: {value}")
 
-    # Ejecutar en un hilo separado
     pipeline_thread = threading.Thread(target=run_pipeline)
     pipeline_thread.start()
     pipeline_thread.join()
@@ -401,6 +446,34 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
     buttons.append({"label": "En tiempo", "instruction": None, "rect": None, "hover": False})
     buttons.append({"label": "Completa", "instruction": None, "rect": None, "hover": False})
 
+    # Botones de modo
+    mode_buttons = [
+        {
+            "label": "Modo Básico",
+            "rect": pygame.Rect(WINDOW_WIDTH - 220, 10, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
+            "hazard_config": None,
+            "hover": False
+        },
+        {
+            "label": "Con Forwarding",
+            "rect": pygame.Rect(WINDOW_WIDTH - 220, 50, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
+            "hazard_config": {"forwarding": True, "prediction": False},
+            "hover": False
+        },
+        {
+            "label": "Con Predicción",
+            "rect": pygame.Rect(WINDOW_WIDTH - 220, 90, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
+            "hazard_config": {"forwarding": False, "prediction": True},
+            "hover": False
+        },
+        {
+            "label": "Modo Completo",
+            "rect": pygame.Rect(WINDOW_WIDTH - 220, 130, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
+            "hazard_config": {"forwarding": True, "prediction": True},
+            "hover": False
+        }
+    ]
+
     screen, font = initialize_pygame()
     clock = pygame.time.Clock()
 
@@ -422,6 +495,9 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
 
     # Ejecución completa
     program_queue = []  # Nueva lista para almacenar todas las instrucciones seleccionadas
+
+    current_mode = "Modo Básico"
+    hazard_unit = None
     
     while running:
         mouse_pos = pygame.mouse.get_pos()
@@ -429,6 +505,18 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
             if event.type == pygame.QUIT:
                 running = False
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                for btn in mode_buttons:
+                    if btn["rect"].collidepoint(mouse_pos):
+                        current_mode = btn["label"]
+                        if btn["hazard_config"] is None:
+                            hazard_unit = None
+                        else:
+                            hazard_unit = Hazard_Unit(
+                                forwarding_enabled=btn["hazard_config"]["forwarding"],
+                                branch_prediction_enabled=btn["hazard_config"]["prediction"]
+                            )
+                        print(f"Cambiado a {current_mode}")
+                        break
                 for button in buttons:
                     if button["rect"].collidepoint(mouse_pos):
                         if button["label"] == "Ejecutar":
@@ -481,7 +569,8 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
                                     buttons, 
                                     cycle, 
                                     start_time,
-                                    num_instrucciones=len(instructions_to_execute)
+                                    num_instrucciones=len(instructions_to_execute),
+                                    hazard_unit=hazard_unit
                                 )
                                 
                                 # Limpiar la cola solo después de que todas las instrucciones hayan terminado
@@ -505,9 +594,17 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
         for button in buttons:
             if "rect" in button:
                 button["hover"] = button["rect"].collidepoint(mouse_pos)
-
         draw_interface(screen, font, pipeline, registers, memory, buttons, cycle, start_time)
         draw_input_box(screen, font, input_box, input_text, input_active)
+        
+        draw_mode_buttons(screen, font, mode_buttons, current_mode)
+        if hazard_unit:
+            stats = hazard_unit.get_statistics()
+            y_pos = 180
+            for stat_name, value in stats.items():
+                text = font.render(f"{stat_name}: {value}", True, FONT_COLOR)
+                screen.blit(text, (WINDOW_WIDTH - 200, y_pos))
+                y_pos += 25
         pygame.display.flip()
         clock.tick(60)
 
