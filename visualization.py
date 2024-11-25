@@ -164,38 +164,52 @@ def execute_pipeline_in_thread(program, registers, memory, pipeline, program_cou
         # Retrasar para visualizar claramente cada ciclo
         time.sleep(0.5)
 
-def execute_pipeline_completa(program, registers, memory, pipeline, program_counter, execute_cycle, screen, font, buttons, cycle, start_time):
+def execute_pipeline_completa(program, registers, memory, pipeline, program_counter, execute_cycle, screen, font, buttons, cycle, start_time,num_instrucciones):
     """
-    Ejecuta el pipeline procesando una instrucción hasta que termine completamente.
+    Ejecuta el pipeline de forma segmentada, permitiendo múltiples instrucciones simultáneas.
     """
     def run_pipeline():
         nonlocal program_counter
-        instruction = program[0]
-        print(f"\nIniciando ejecución de: {instruction}")
+        # Calculamos los ciclos necesarios basados en el número de instrucciones
+        # Para N instrucciones necesitamos N + 4 ciclos
+        total_cycles = len(program) + 4 + num_instrucciones # Fórmula: num_instrucciones + 4
         
-        # Ejecutar todos los ciclos necesarios para completar la instrucción
-        for i in range(6):  # 6 ciclos para asegurar que complete todas las etapas
-            print(f"Ciclo {i + 1} de la instrucción")
+        print(f"\nIniciando ejecución segmentada con {len(program)} instrucciones")
+        print(f"Ciclos totales necesarios: {total_cycles}")
+        
+        # Ejecutar hasta que todas las instrucciones hayan terminado
+        for i in range(total_cycles):
+            print(f"\nCiclo global {i + 1} de {total_cycles}")
+            
+            # Actualizar la interfaz
             draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
             pygame.display.flip()
 
-            program_counter = execute_cycle([instruction], registers, memory, pipeline, program_counter)
-
+            # Ejecutar un ciclo del pipeline
+            program_counter = execute_cycle(program, registers, memory, pipeline, program_counter)
+            
+            # Mostrar estado actual del pipeline
+            print("Estado del pipeline:")
+            for stage, instr in pipeline.items():
+                print(f"{stage}: {instr if instr else 'vacío'}")
+            
+            # Actualizar la interfaz después del ciclo
             draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
             pygame.display.flip()
             
-            time.sleep(0.5)  # Dar tiempo para visualizar cada ciclo
-        
-        # Esperar a que el pipeline esté completamente vacío
-        while not is_pipeline_empty(pipeline):
-            time.sleep(0.1)
-        
-        print(f"Finalizada ejecución de: {instruction}\n")
+            # Verificar si el pipeline está completamente vacío
+            if is_pipeline_empty(pipeline) and i >= len(program):
+                print("Pipeline vacío y todas las instrucciones completadas")
+                break
+            
+            time.sleep(0.5)
 
-    # Ejecutar en un hilo y esperar a que termine
+        print(f"\nEjecución segmentada completada después de {total_cycles} ciclos")
+
+    # Ejecutar en un hilo separado
     pipeline_thread = threading.Thread(target=run_pipeline)
     pipeline_thread.start()
-    pipeline_thread.join()  # Esperar a que termine completamente
+    pipeline_thread.join()
 
 
 def is_pipeline_empty(pipeline):
@@ -451,14 +465,28 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
                                 print("Tiempo inválido o no hay instrucción seleccionada")
                         elif button["label"] == "Completa":
                             if 0 < len(program_queue):
-                                print("Instrucciones:", program_queue)
-                                for next_instruction in program_queue:
-                                    print("Instrucción a ejecutar:", next_instruction)
-                                    execute_pipeline_completa([next_instruction], registers, memory, pipeline, 
-                                                            program_counter, execute_cycle, screen, 
-                                                            font, buttons, cycle, start_time)
-                                print("\nEjecución completa finalizada")
-                                program_queue.clear()  # Limpiar el programa después de la ejecución
+                                print(f"\nIniciando ejecución segmentada con {len(program_queue)} instrucciones")
+                                instructions_to_execute = program_queue.copy()  # Hacer una copia de las instrucciones
+                                
+                                # Ejecutar todas las instrucciones en modo pipeline
+                                execute_pipeline_completa(
+                                    instructions_to_execute,
+                                    registers, 
+                                    memory, 
+                                    pipeline, 
+                                    program_counter, 
+                                    execute_cycle, 
+                                    screen, 
+                                    font, 
+                                    buttons, 
+                                    cycle, 
+                                    start_time,
+                                    num_instrucciones=len(instructions_to_execute)
+                                )
+                                
+                                # Limpiar la cola solo después de que todas las instrucciones hayan terminado
+                                program_queue.clear()
+                                print("\nTodas las instrucciones han sido ejecutadas")
                             else:
                                 print("Seleccione al menos una instrucción para ejecutar")
                         else:
