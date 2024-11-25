@@ -1,6 +1,7 @@
 import pygame
 import threading
 import time
+import threading
 
 # visualization.py
 # Configuración de la ventana
@@ -162,6 +163,40 @@ def execute_pipeline_in_thread(program, registers, memory, pipeline, program_cou
 
         # Retrasar para visualizar claramente cada ciclo
         time.sleep(0.5)
+
+def execute_pipeline_completa(program, registers, memory, pipeline, program_counter, execute_cycle, screen, font, buttons, cycle, start_time):
+    """
+    Ejecuta el pipeline procesando una instrucción hasta que termine completamente.
+    """
+    def run_pipeline():
+        nonlocal program_counter
+        instruction = program[0]
+        print(f"\nIniciando ejecución de: {instruction}")
+        
+        # Ejecutar todos los ciclos necesarios para completar la instrucción
+        for i in range(6):  # 6 ciclos para asegurar que complete todas las etapas
+            print(f"Ciclo {i + 1} de la instrucción")
+            draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
+            pygame.display.flip()
+
+            program_counter = execute_cycle([instruction], registers, memory, pipeline, program_counter)
+
+            draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
+            pygame.display.flip()
+            
+            time.sleep(0.5)  # Dar tiempo para visualizar cada ciclo
+        
+        # Esperar a que el pipeline esté completamente vacío
+        while not is_pipeline_empty(pipeline):
+            time.sleep(0.1)
+        
+        print(f"Finalizada ejecución de: {instruction}\n")
+
+    # Ejecutar en un hilo y esperar a que termine
+    pipeline_thread = threading.Thread(target=run_pipeline)
+    pipeline_thread.start()
+    pipeline_thread.join()  # Esperar a que termine completamente
+
 
 def is_pipeline_empty(pipeline):
     return all(stage is None for stage in pipeline.values())
@@ -350,6 +385,7 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
     buttons.append({"label": "Ejecutar", "instruction": None, "rect": None, "hover": False})
     buttons.append({"label": "Step-by-Step", "instruction": None, "rect": None, "hover": False})
     buttons.append({"label": "En tiempo", "instruction": None, "rect": None, "hover": False})
+    buttons.append({"label": "Completa", "instruction": None, "rect": None, "hover": False})
 
     screen, font = initialize_pygame()
     clock = pygame.time.Clock()
@@ -364,10 +400,14 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
     draw_buttons(screen, font, buttons)
     running = True
 
+    # Ejecución con tiempo
     input_active = False
     input_text = "0.1"
     cycle_time = 0.1
     input_box = pygame.Rect(screen.get_width() - 140, 60, 100, 32)
+
+    # Ejecución completa
+    program_queue = []  # Nueva lista para almacenar todas las instrucciones seleccionadas
     
     while running:
         mouse_pos = pygame.mouse.get_pos()
@@ -379,18 +419,18 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
                     if button["rect"].collidepoint(mouse_pos):
                         if button["label"] == "Ejecutar":
                             if selected_instruction:
-                                execute_pipeline_in_thread(
-                                    [selected_instruction], registers, memory, pipeline, program_counter,
-                                    execute_cycle, screen, font, buttons, cycle, start_time
-                                )
+                                execute_pipeline_in_thread([selected_instruction], registers, memory, pipeline, program_counter,
+                                    execute_cycle, screen, font, buttons, 
+                                    cycle, start_time)
                                 selected_instruction = None
                             else:
                                 print("Primero selecciona una instrucción")
                         elif button["label"] == "Step-by-Step":
                             if selected_instruction:
                                 program_counter = execute_pipeline_step(
-                                    [selected_instruction], registers, memory, pipeline, program_counter, current_stage
-                                )
+                                    [selected_instruction], registers, memory, pipeline, 
+                                    program_counter, current_stage)
+                                program_queue.clear()  # Limpiar el programa después de la ejecución
                                 current_stage += 1
                                 if current_stage >= 6:
                                     current_stage = 0
@@ -406,12 +446,27 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
                                     [selected_instruction], registers, memory, pipeline, execute_cycle, cycle_time,screen,
                                     font,buttons,start_time)
                                 selected_instruction = None
+                                program_queue.clear()  # Limpiar el programa después de la ejecución
                             else:
                                 print("Tiempo inválido o no hay instrucción seleccionada")
+                        elif button["label"] == "Completa":
+                            if 0 < len(program_queue):
+                                print("Instrucciones:", program_queue)
+                                for next_instruction in program_queue:
+                                    print("Instrucción a ejecutar:", next_instruction)
+                                    execute_pipeline_completa([next_instruction], registers, memory, pipeline, 
+                                                            program_counter, execute_cycle, screen, 
+                                                            font, buttons, cycle, start_time)
+                                print("\nEjecución completa finalizada")
+                                program_queue.clear()  # Limpiar el programa después de la ejecución
+                            else:
+                                print("Seleccione al menos una instrucción para ejecutar")
                         else:
                             selected_instruction = button["instruction"]
+                            program_queue.append(selected_instruction)
                             current_stage = 0
                             print(f"Instrucción seleccionada: {selected_instruction}")
+                        
 
             input_text, input_active = handle_text_input(event, input_text, input_active, input_box, mouse_pos)
             try:
