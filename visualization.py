@@ -2,6 +2,7 @@ import pygame
 import threading
 import time
 
+# visualization.py
 # Configuración de la ventana
 WINDOW_WIDTH, WINDOW_HEIGHT = 900, 620
 BG_COLOR = (30, 30, 30)  # Fondo gris oscuro
@@ -174,9 +175,14 @@ def execute_pipeline_step(program, registers, memory, pipeline, program_counter,
         stage = stages[current_stage]
         print(f"\n---- Ejecutando etapa: {stage} ----")
 
-        # Lógica de cada etapa según el pipeline
+def execute_pipeline_step(program, registers, memory, pipeline, program_counter, current_stage):
+    stages = ["IF", "ID", "EX", "MEM", "WB"]
+    if current_stage < len(stages):
+        stage = stages[current_stage]
+        print(f"\n---- Ejecutando etapa: {stage} ----")
+
         if stage == "IF":
-                # Instruction Fetch (IF)
+            # Instruction Fetch (IF)
             if pipeline["IF"] is None and program_counter < len(program):
                 pipeline["IF"] = program[program_counter]
                 pipeline["IF"]["delay"] = True  # Mantener en IF un ciclo
@@ -188,8 +194,10 @@ def execute_pipeline_step(program, registers, memory, pipeline, program_counter,
 
             if pipeline["IF"] and "delay" in pipeline["IF"]:
                 del pipeline["IF"]["delay"]
+                print("IF - Delay eliminado, listo para mover a ID")
             elif pipeline["IF"] and pipeline["ID"] is None:
                 pipeline["ID"] = pipeline["IF"]
+                print(f"IF - Pasando instrucción a ID: {pipeline['ID']}")
                 pipeline["IF"] = None
 
         elif stage == "ID":
@@ -277,6 +285,8 @@ def execute_pipeline_step(program, registers, memory, pipeline, program_counter,
         print("\n--- Pipeline vacío y programa completado. ---")
         return program_counter
 
+    return program_counter
+
 def print_pipeline_state(pipeline, registers, memory, program_counter):
     """
     Muestra el estado actual del pipeline.
@@ -289,13 +299,57 @@ def print_pipeline_state(pipeline, registers, memory, program_counter):
     print(f"Program Counter (PC): {program_counter}")
 
 
+# Ejecución del pipeline a un ritmo constante
+def draw_input_box(screen, font, input_box, input_text, active):
+    color = pygame.Color('dodgerblue2') if active else pygame.Color('lightskyblue3')
+    pygame.draw.rect(screen, color, input_box, 2)
+    label = font.render("Tiempo de ciclo(s):", True, pygame.Color('white'))
+    screen.blit(label, (input_box.x, input_box.y - 20))
+    text_surface = font.render(input_text, True, pygame.Color('white'))
+    screen.blit(text_surface, (input_box.x + 5, input_box.y + 5))
+
+def handle_text_input(event, input_text, input_active, input_box, mouse_pos):
+    if event.type == pygame.MOUSEBUTTONDOWN:
+        input_active = input_box.collidepoint(mouse_pos)
+    
+    if event.type == pygame.KEYDOWN and input_active:
+        if event.key == pygame.K_RETURN:
+            return input_text, False
+        elif event.key == pygame.K_BACKSPACE:
+            input_text = input_text[:-1]
+        else:
+            if event.unicode.replace('.', '').isdigit():
+                input_text += event.unicode
+    
+    return input_text, input_active
+
+def execute_pipeline_with_timing(program, registers, memory, pipeline, execute_cycle, cycle_time,screen,font,buttons,start_time):
+    program_counter = 0
+    cycle = 0
+
+    while not is_pipeline_empty(pipeline) or program_counter < len(program):
+        for i in range(6):  # Seis ciclos para que la instrucción pase por todas las etapas
+            print(f"\nCiclo {cycle + i}")
+            # Mostrar el estado actualizado después de ejecutar el ciclo
+            draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
+            pygame.display.flip()
+            program_counter = execute_cycle(program, registers, memory, pipeline, program_counter)
+            print_pipeline_state(pipeline, registers, memory, program_counter)
+            # Mostrar el estado actualizado después de ejecutar el ciclo
+            draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
+            pygame.display.flip()
+            time.sleep(cycle_time)
+            cycle += 1
+
+    print("\n--- Simulación Finalizada ---")
+    print(f"Registros finales: {registers}")
 
 def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, buttons):
-    global selected_instruction  # Variable global para rastrear la instrucción seleccionada
+    global selected_instruction
 
-    # Añadir botones "Ejecutar" y "Step-by-Step" al final de la lista de botones
     buttons.append({"label": "Ejecutar", "instruction": None, "rect": None, "hover": False})
     buttons.append({"label": "Step-by-Step", "instruction": None, "rect": None, "hover": False})
+    buttons.append({"label": "En tiempo", "instruction": None, "rect": None, "hover": False})
 
     screen, font = initialize_pygame()
     clock = pygame.time.Clock()
@@ -304,66 +358,75 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
     cycle = 1
     start_time = time.time()
 
-    current_stage = 0  # Etapa actual del pipeline (0-4)
-    stages = ["IF", "ID", "EX", "MEM", "WB"]  # Etapas del pipeline
+    current_stage = 0
+    stages = ["IF", "ID", "EX", "MEM", "WB"]
 
-    # Dibujar los botones iniciales para asignar los rectángulos
     draw_buttons(screen, font, buttons)
-    
     running = True
+
+    input_active = False
+    input_text = "0.1"
+    cycle_time = 0.1
+    input_box = pygame.Rect(screen.get_width() - 140, 60, 100, 32)
+    
     while running:
         mouse_pos = pygame.mouse.get_pos()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # Verificar si se presionó un botón
                 for button in buttons:
                     if button["rect"].collidepoint(mouse_pos):
                         if button["label"] == "Ejecutar":
                             if selected_instruction:
-                                print(f"Ejecutando instrucción completa: {selected_instruction}")
-                                # Ejecutar toda la instrucción usando execute_cycle
                                 execute_pipeline_in_thread(
                                     [selected_instruction], registers, memory, pipeline, program_counter,
                                     execute_cycle, screen, font, buttons, cycle, start_time
                                 )
-                                selected_instruction = None  # Resetear después de ejecutar
+                                selected_instruction = None
                             else:
                                 print("Primero selecciona una instrucción")
                         elif button["label"] == "Step-by-Step":
                             if selected_instruction:
-                                print(f"Ejecutando etapa {current_stage + 1} de la instrucción: {selected_instruction}")
                                 program_counter = execute_pipeline_step(
                                     [selected_instruction], registers, memory, pipeline, program_counter, current_stage
                                 )
                                 current_stage += 1
-                                if current_stage >= 5:  # Si llegamos a la última etapa, reiniciar
-                                    print("Instrucción completada.")
+                                if current_stage >= 6:
                                     current_stage = 0
                                     selected_instruction = None
                                     if is_pipeline_empty(pipeline):
-                                        print("--- Pipeline completamente vacío. Reinicio completo. ---")
                                         program_counter = 0
-                                        pipeline = {stage: None for stage in stages}  # Reiniciar pipeline
+                                        pipeline = {stage: None for stage in stages}
                             else:
                                 print("Primero selecciona una instrucción para Step-by-Step")
+                        elif button["label"] == "En tiempo":
+                            if 0.01 <= cycle_time <= 0.1 and selected_instruction:
+                                execute_pipeline_with_timing(
+                                    [selected_instruction], registers, memory, pipeline, execute_cycle, cycle_time,screen,
+                                    font,buttons,start_time)
+                                selected_instruction = None
+                            else:
+                                print("Tiempo inválido o no hay instrucción seleccionada")
                         else:
-                            # Seleccionar instrucción (si no es un botón especial)
                             selected_instruction = button["instruction"]
-                            current_stage = 0  # Reiniciar el contador de etapas
+                            current_stage = 0
                             print(f"Instrucción seleccionada: {selected_instruction}")
 
+            input_text, input_active = handle_text_input(event, input_text, input_active, input_box, mouse_pos)
+            try:
+                cycle_time = float(input_text)
+            except ValueError:
+                pass
 
-        # Actualizar el estado de los botones para el efecto de hover
         for button in buttons:
             if "rect" in button:
                 button["hover"] = button["rect"].collidepoint(mouse_pos)
 
-        # Dibujar la interfaz completa después de los eventos del ciclo
         draw_interface(screen, font, pipeline, registers, memory, buttons, cycle, start_time)
-        pygame.display.flip()  # Refrescar la pantalla
-        clock.tick(60)  # Limitar la actualización a 60 FPS
+        draw_input_box(screen, font, input_box, input_text, input_active)
+        pygame.display.flip()
+        clock.tick(60)
 
     pygame.quit()
 

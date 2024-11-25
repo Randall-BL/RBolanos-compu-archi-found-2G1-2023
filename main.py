@@ -2,6 +2,7 @@ from registers import initialize_registers, initialize_memory
 from pipeline import initialize_pipeline, execute_cycle
 from instructions import program
 from visualization import visualize_with_pygame
+# main.py
 
 def main():
     # Inicialización de registros, memoria y pipeline

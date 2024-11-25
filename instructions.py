@@ -1,5 +1,5 @@
-# Programa de ejemplo
-# Programa de ejemplo
+# instructions.py
+# Configuración de las instrucciones del programa 10 instrucciones.
 def program():
     return [
         {"opcode": "ADD", "dest": 1, "src1": 2, "src2": 3},  # ADD R1, R2, R3

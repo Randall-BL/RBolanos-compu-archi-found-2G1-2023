@@ -1,4 +1,5 @@
 # Inicializa los registros y la memoria
+# registers.py
 def initialize_registers():
     registers = [0] * 9  # Incluye R8 como el registro del PC
 
