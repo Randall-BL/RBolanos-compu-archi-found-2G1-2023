@@ -2,6 +2,7 @@ import pygame
 import threading
 import time
 import threading
+from historial import MetricsHistory
 
 from metricas import ProcessorMetrics
 from hazard_unit import Hazard_Unit
@@ -872,6 +873,9 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle,re
                                 print("\nTodas las instrucciones han sido ejecutadas")
                             else:
                                 print("Seleccione al menos una instrucción para ejecutar")
+                        elif button["label"] == "Historial":
+                            history_viewer = MetricsHistory()
+                            history_viewer.show_history()
                         else:
                             selected_instruction = button["instruction"]
                             program_queue.append(selected_instruction)

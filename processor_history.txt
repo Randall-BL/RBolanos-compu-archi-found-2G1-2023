@@ -1,0 +1,102 @@
+[
+  {
+    "timestamp": "2024-11-26 08:24:21",
+    "metrics": {
+      "tiempo": "0.00s",
+      "ciclos": "48",
+      "cpi": "0.00",
+      "ipc": "0.00",
+      "frecuencia": "0.00Hz"
+    }
+  },
+  {
+    "timestamp": "2024-11-26 08:24:21",
+    "metrics": {
+      "tiempo": "0.00s",
+      "ciclos": "48",
+      "cpi": "4.00",
+      "ipc": "0.25",
+      "frecuencia": "32393.66Hz"
+    }
+  },
+  {
+    "timestamp": "2024-11-26 08:24:21",
+    "metrics": {
+      "tiempo": "0.00s",
+      "ciclos": "48",
+      "cpi": "0.00",
+      "ipc": "0.00",
+      "frecuencia": "0.00Hz"
+    }
+  },
+  {
+    "timestamp": "2024-11-26 08:24:21",
+    "metrics": {
+      "tiempo": "0.00s",
+      "ciclos": "48",
+      "cpi": "4.00",
+      "ipc": "0.25",
+      "frecuencia": "32393.66Hz"
+    }
+  },
+  {
+    "timestamp": "2024-11-26 08:24:21",
+    "metrics": {
+      "tiempo": "0.00s",
+      "ciclos": "48",
+      "cpi": "0.00",
+      "ipc": "0.00",
+      "frecuencia": "0.00Hz"
+    }
+  },
+  {
+    "timestamp": "2024-11-26 08:24:21",
+    "metrics": {
+      "tiempo": "0.00s",
+      "ciclos": "48",
+      "cpi": "4.00",
+      "ipc": "0.25",
+      "frecuencia": "32393.66Hz"
+    }
+  },
+  {
+    "timestamp": "2024-11-26 08:24:21",
+    "metrics": {
+      "tiempo": "0.00s",
+      "ciclos": "48",
+      "cpi": "0.00",
+      "ipc": "0.00",
+      "frecuencia": "0.00Hz"
+    }
+  },
+  {
+    "timestamp": "2024-11-26 08:24:21",
+    "metrics": {
+      "tiempo": "0.00s",
+      "ciclos": "48",
+      "cpi": "4.00",
+      "ipc": "0.25",
+      "frecuencia": "32393.66Hz"
+    }
+  },
+  {
+    "timestamp": "2024-11-26 08:24:21",
+    "metrics": {
+      "tiempo": "0.00s",
+      "ciclos": "48",
+      "cpi": "0.00",
+      "ipc": "0.00",
+      "frecuencia": "0.00Hz"
+    }
+  },
+  {
+    "timestamp": "2024-11-26 08:24:21",
+    "metrics": {
+      "tiempo": "0.00s",
+      "ciclos": "48",
+      "cpi": "4.00",
+      "ipc": "0.25",
+      "frecuencia": "32393.66Hz"
+    }
+  }
+]
