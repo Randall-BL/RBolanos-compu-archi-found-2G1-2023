@@ -3,6 +3,7 @@ import threading
 import time
 import threading
 
+from metricas import ProcessorMetrics
 from hazard_unit import Hazard_Unit
 
 # visualization.py
@@ -101,22 +102,27 @@ def draw_mode_buttons(screen, font, mode_buttons, current_mode_p1, current_mode_
         text_rect = text.get_rect(center=btn["rect"].center)
         screen.blit(text, text_rect)
 
-def draw_header(screen, font, cycle, start_time, registers):
+def draw_header(screen, font, registers, registers2):
     """
-    Dibuja el encabezado con ciclo, tiempo transcurrido y PC (R8).
+    Dibuja el encabezado con los PC (R8) de ambos procesadores.
     """
-    current_time = time.time() - start_time
-    header_texts = [
-        f"Ciclo: {cycle}",
-        f"Tiempo: {current_time:.2f} segundos",
-        f"PC (R8): {registers[8]}"  # Obtener el valor del registro R8
-    ]
-
-    y = 80
-    for text in header_texts:
-        render = font.render(text, True, FONT_COLOR)
-        screen.blit(render, (10, y))
-        y += 30
+    # Título para Procesador 1
+    title_p1 = font.render("Procesador 1", True, FONT_COLOR)
+    screen.blit(title_p1, (10, 60))
+    
+    # PC del Procesador 1
+    pc_text_p1 = f"PC (R8): {registers[8]}"
+    render_p1 = font.render(pc_text_p1, True, FONT_COLOR)
+    screen.blit(render_p1, (10, 80))
+    
+    # Título para Procesador 2
+    title_p2 = font.render("Procesador 2", True, FONT_COLOR)
+    screen.blit(title_p2, (10, 260))
+    
+    # PC del Procesador 2
+    pc_text_p2 = f"PC (R8): {registers2[8]}"
+    render_p2 = font.render(pc_text_p2, True, FONT_COLOR)
+    screen.blit(render_p2, (10, 280))
 
 # Procesador 1
 
@@ -217,7 +223,7 @@ def draw_memory2(screen, font, memory, start=0, end=8):
 
 
 # Metricas para comparar procesadores
-def draw_performance_metrics(screen, font, x, y, width, height):
+def draw_performance_metrics(screen, font, x, y, width, height, metrics_p1, metrics_p2):
     """
     Dibuja una tabla de métricas de rendimiento
     """
@@ -229,13 +235,17 @@ def draw_performance_metrics(screen, font, x, y, width, height):
     pygame.draw.rect(screen, WHITE, (x, y, width, height))
     pygame.draw.rect(screen, BLACK, (x, y, width, height), 2)
     
-    # Métricas a mostrar (podemos calcularlas después)
+    # Obtener métricas actuales
+    p1_metrics = metrics_p1.get_metrics()
+    p2_metrics = metrics_p2.get_metrics()
+    
+    # Métricas a mostrar
     metrics = [
-        ("Tiempo", "2", "3"),
-        ("Ciclos", "2", "40"),
-        ("CPI", "2", "3"),
-        ("IPC", "5", "15"),
-        ("Frec. reloj", "5", "15")
+        ("Tiempo", p1_metrics["tiempo"], p2_metrics["tiempo"]),
+        ("Ciclos", p1_metrics["ciclos"], p2_metrics["ciclos"]),
+        ("CPI", p1_metrics["cpi"], p2_metrics["cpi"]),
+        ("IPC", p1_metrics["ipc"], p2_metrics["ipc"]),
+        ("Frec. reloj", p1_metrics["frecuencia"], p2_metrics["frecuencia"])
     ]
     
     # Encabezados
@@ -282,7 +292,7 @@ def draw_interface(screen, font, pipeline, registers, memory,registers2, memory2
     screen.fill(BG_COLOR)
 
     # Dibujar todos los elementos visuales
-    draw_header(screen, font, cycle, start_time, registers)  # Obtener PC desde registers[8]
+    draw_header(screen, font, registers, registers2)  # Obtener PC desde registers[8]
     draw_pipeline(screen, font, pipeline)
     draw_pipeline2(screen, font, pipeline2)
     draw_registers2(screen, font, registers2)
@@ -290,36 +300,11 @@ def draw_interface(screen, font, pipeline, registers, memory,registers2, memory2
     draw_registers(screen, font, registers)
     draw_memory(screen, font, memory)
     draw_buttons(screen, font, buttons)
-    
-    metrics_x = 880  # Ajusta según necesites
-    metrics_y = 450  # Ajusta según necesites
-    metrics_width = 400
-    metrics_height = 200
-    draw_performance_metrics(screen, font, metrics_x, metrics_y, metrics_width, metrics_height)
-
-def execute_pipeline_in_thread(program, registers, memory, pipeline, program_counter, execute_cycle, screen, font, buttons, cycle, start_time,registers2, memory2, pipeline2, cycle2):
-    """
-    Ejecuta el pipeline en un hilo separado para no bloquear la interfaz gráfica.
-    """
-    for i in range(6):  # Seis ciclos para que la instrucción pase por todas las etapas
-        # Dibujar la interfaz después de cada ciclo
-        draw_interface(screen, font, pipeline, registers, memory,registers2, memory2, pipeline2, cycle2, buttons, cycle + i, start_time)
-        pygame.display.flip()
-
-        # Ejecutar un ciclo del pipeline
-        program_counter = execute_cycle(program, registers, memory, pipeline, program_counter)
-
-        # Mostrar el estado actualizado después de ejecutar el ciclo
-        draw_interface(screen, font, pipeline, registers, memory,registers2, memory2, pipeline2, cycle2, buttons, cycle + i, start_time)
-        pygame.display.flip()
-
-        # Retrasar para visualizar claramente cada ciclo
-        time.sleep(0.5)
 
 def execute_pipeline_completa(program, registers, memory, pipeline, program_counter, 
                             registers2, memory2, pipeline2, program_counter2,
                             execute_cycle, screen, font, buttons, cycle, start_time,cycle2, 
-                            num_instrucciones, hazard_unit_p1=None, hazard_unit_p2=None):
+                            num_instrucciones, hazard_unit_p1=None, hazard_unit_p2=None,metrics_p1=None, metrics_p2=None):
     """
     Ejecuta el pipeline de forma segmentada para ambos procesadores simultáneamente.
     """
@@ -358,11 +343,26 @@ def execute_pipeline_completa(program, registers, memory, pipeline, program_coun
             
             pygame.display.flip()
 
+            metrics_p1.start_execution()
             # Ejecutar un ciclo en ambos procesadores
             program_counter = execute_cycle(program, registers, memory, pipeline, 
                                          program_counter, hazard_unit_p1)
+            
+                        # Actualizar métricas
+            if metrics_p1:
+                metrics_p1.increment_cycle()
+                if pipeline.get("WB") is not None:
+                    metrics_p1.add_completed_instruction()
+            metrics_p1.end_execution()
+            
+            metrics_p2.start_execution()
             program_counter2 = execute_cycle(program, registers2, memory2, pipeline2, 
                                           program_counter2, hazard_unit_p2)
+            if metrics_p2:
+                metrics_p2.increment_cycle()
+                if pipeline2.get("WB") is not None:
+                    metrics_p2.add_completed_instruction()
+            metrics_p2.end_execution()
             
             # Mostrar estado actual de ambos pipelines
             print("\nEstado del pipeline P1:")
@@ -379,6 +379,7 @@ def execute_pipeline_completa(program, registers, memory, pipeline, program_coun
                          buttons, cycle + i, start_time)
             
             pygame.display.flip()
+
             
             # Verificar si ambos pipelines han terminado
             if (is_pipeline_empty(pipeline) and is_pipeline_empty(pipeline2) and 
@@ -406,58 +407,34 @@ def execute_pipeline_completa(program, registers, memory, pipeline, program_coun
 def is_pipeline_empty(pipeline):
     return all(stage is None for stage in pipeline.values())
 
-def execute_pipeline_step(program, registers, memory, pipeline, program_counter, current_stage):
-    """
-    Ejecuta solo una etapa específica del pipeline para la instrucción dada.
-    """
-    stages = ["IF", "ID", "EX", "MEM", "WB"]
-    if current_stage < len(stages):
-        stage = stages[current_stage]
-        print(f"\n---- Ejecutando etapa: {stage} ----")
-
 def execute_pipeline_step(program, registers, memory, pipeline, program_counter,
                          registers2, memory2, pipeline2, program_counter2,
                          execute_cycle, screen, font, buttons, cycle, start_time, cycle2,
                          current_stage, hazard_unit_p1=None, hazard_unit_p2=None):
     """
     Ejecuta un paso del pipeline para ambos procesadores.
-    Retorna: (program_counter1, program_counter2, current_stage, is_finished)
     """
     stages = ["IF", "ID", "EX", "MEM", "WB"]
+    total_cycles = len(program) + 4  # 4 ciclos adicionales para vaciar el pipeline
     
     if current_stage < len(stages):
         stage = stages[current_stage]
-        print(f"\n---- Ejecutando etapa: {stage} ----")
+        print(f"\n---- Ejecutando etapa: {stage} (Ciclo {cycle + 1} de {total_cycles}) ----")
         
-        # Actualizar la interfaz antes de la ejecución
+        # Actualizar interfaz inicial
         draw_interface(screen, font, pipeline, registers, memory,
                       registers2, memory2, pipeline2, cycle2,
                       buttons, cycle, start_time)
         
-        # Mostrar estadísticas de las unidades de riesgos
-        y_pos = 180
-        if hazard_unit_p1:
-            stats_p1 = hazard_unit_p1.get_statistics()
-            for stat_name, value in stats_p1.items():
-                text = font.render(f"P1 {stat_name}: {value}", True, FONT_COLOR)
-                screen.blit(text, (WINDOW_WIDTH - 200, y_pos))
-                y_pos += 25
-        
-        if hazard_unit_p2:
-            stats_p2 = hazard_unit_p2.get_statistics()
-            for stat_name, value in stats_p2.items():
-                text = font.render(f"P2 {stat_name}: {value}", True, FONT_COLOR)
-                screen.blit(text, (WINDOW_WIDTH - 200, y_pos))
-                y_pos += 25
-        
-        pygame.display.flip()
-
-        # Ejecutar la etapa actual en ambos procesadores
-        if program_counter < len(program):
+        # Ejecutar solo la etapa actual
+        if stage == "IF" and program_counter < len(program):
             program_counter = execute_cycle(program, registers, memory, pipeline,
                                          program_counter, hazard_unit_p1)
-        
-        if program_counter2 < len(program):
+            program_counter2 = execute_cycle(program, registers2, memory2, pipeline2,
+                                          program_counter2, hazard_unit_p2)
+        elif pipeline.get(stage) is not None:
+            program_counter = execute_cycle(program, registers, memory, pipeline,
+                                         program_counter, hazard_unit_p1)
             program_counter2 = execute_cycle(program, registers2, memory2, pipeline2,
                                           program_counter2, hazard_unit_p2)
         
@@ -470,16 +447,14 @@ def execute_pipeline_step(program, registers, memory, pipeline, program_counter,
         for stage_name, instr in pipeline2.items():
             print(f"{stage_name}: {instr if instr else 'vacío'}")
         
-        # Actualizar la interfaz después de la ejecución
+        # Actualizar interfaz final
         draw_interface(screen, font, pipeline, registers, memory,
                       registers2, memory2, pipeline2, cycle2,
                       buttons, cycle, start_time)
         pygame.display.flip()
         
         # Incrementar la etapa actual
-        current_stage += 1
-        if current_stage >= len(stages):
-            current_stage = 0
+        current_stage = (current_stage + 1) % len(stages)
         
         # Verificar si la ejecución ha terminado
         is_finished = (is_pipeline_empty(pipeline) and is_pipeline_empty(pipeline2) and 
@@ -528,7 +503,7 @@ def handle_text_input(event, input_text, input_active, input_box, mouse_pos):
 def execute_pipeline_with_timing(program, registers, memory, pipeline, program_counter, 
                             registers2, memory2, pipeline2, program_counter2,
                             execute_cycle, screen, font, buttons, cycle, start_time, cycle2, 
-                            num_instrucciones, cycle_time=0.5, hazard_unit_p1=None, hazard_unit_p2=None):
+                            num_instrucciones, cycle_time=0.5, hazard_unit_p1=None, hazard_unit_p2=None,metrics_p1=None, metrics_p2=None):
     """
     Ejecuta el pipeline de forma segmentada para ambos procesadores simultáneamente.
     Ahora incluye control de tiempo de ciclo.
@@ -578,10 +553,29 @@ def execute_pipeline_with_timing(program, registers, memory, pipeline, program_c
             pygame.display.flip()
 
             # Ejecutar un ciclo en ambos procesadores
+            metrics_p1.start_execution()
             program_counter = execute_cycle(program, registers, memory, pipeline, 
                                          program_counter, hazard_unit_p1)
+            # Actualizar métricas
+            if metrics_p1:
+                metrics_p1.increment_cycle()
+                if pipeline.get("WB") is not None:
+                    metrics_p1.add_completed_instruction()
+
+
+            metrics_p1.end_execution()
+            
+            metrics_p2.start_execution()
             program_counter2 = execute_cycle(program, registers2, memory2, pipeline2, 
                                           program_counter2, hazard_unit_p2)
+            if metrics_p2:
+                metrics_p2.increment_cycle()
+                if pipeline2.get("WB") is not None:
+                    metrics_p2.add_completed_instruction()
+
+
+            metrics_p2.end_execution()
+            
             
             # Mostrar estado actual de ambos pipelines
             print("\nEstado del pipeline P1:")
@@ -598,7 +592,9 @@ def execute_pipeline_with_timing(program, registers, memory, pipeline, program_c
                          buttons, cycle + i, start_time)
             
             pygame.display.flip()
+
             
+
             # Verificar si ambos pipelines han terminado
             if (is_pipeline_empty(pipeline) and is_pipeline_empty(pipeline2) and 
                 i >= len(program)):
@@ -630,8 +626,9 @@ def execute_pipeline_with_timing(program, registers, memory, pipeline, program_c
 
 def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle,registers2, memory2, pipeline2, execute_cycle2, buttons):
     global selected_instruction
+    metrics_p1 = ProcessorMetrics()
+    metrics_p2 = ProcessorMetrics()
 
-    buttons.append({"label": "Ejecutar", "instruction": None, "rect": None, "hover": False})
     buttons.append({"label": "Step-by-Step", "instruction": None, "rect": None, "hover": False})
     buttons.append({"label": "En tiempo", "instruction": None, "rect": None, "hover": False})
     buttons.append({"label": "Completa", "instruction": None, "rect": None, "hover": False})
@@ -756,16 +753,11 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle,re
                         break
                 for button in buttons:
                     if button["rect"].collidepoint(mouse_pos):
-                        if button["label"] == "Ejecutar":
-                            if selected_instruction:
-                                execute_pipeline_in_thread([selected_instruction], registers, memory, pipeline, program_counter,
-                                    execute_cycle, screen, font, buttons, 
-                                    cycle, start_time,registers2, memory2, pipeline2, execute_cycle2)
-                                selected_instruction = None
-                            else:
-                                print("Primero selecciona una instrucción")
-                        elif button["label"] == "Step-by-Step":
+                        if button["label"] == "Step-by-Step":
                             if 0 < len(program_queue):
+                                if current_stage == 0:  # Si es el primer paso
+                                    metrics_p1.start_execution()
+                                    metrics_p2.start_execution()
                                 instructions_to_execute = program_queue.copy()
                                 program_counter, program_counter2, current_stage, is_finished = execute_pipeline_step(
                                     instructions_to_execute,
@@ -788,8 +780,20 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle,re
                                     hazard_unit_p1,
                                     hazard_unit_p2
                                 )
+                                # Actualizar métricas
+                                metrics_p1.increment_cycle()
+                                metrics_p2.increment_cycle()
+                                if pipeline.get("WB") is not None:
+                                    metrics_p1.add_completed_instruction()
+                                metrics_p1.end_execution()
+
+                                if pipeline2.get("WB") is not None:
+                                    metrics_p2.add_completed_instruction()
+                                metrics_p2.end_execution()
                                 
                                 if is_finished:
+                                    
+                                    
                                     print("\nEjecución paso a paso completada")
                                     program_queue.clear()
                                     current_stage = 0
@@ -825,7 +829,10 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle,re
                                                     num_instrucciones=len(instructions_to_execute),
                                                     cycle_time=cycle_time,  # Añadido el parámetro de tiempo
                                                     hazard_unit_p1=hazard_unit_p1,
-                                                    hazard_unit_p2=hazard_unit_p2)
+                                                    hazard_unit_p2=hazard_unit_p2,
+                                                    metrics_p1=metrics_p1,
+                                                    metrics_p2=metrics_p2
+                                                    )
                                     program_queue.clear()  # Limpiar el programa después de la ejecución
                                 else:
                                     print("Tiempo inválido debe estar entre 0.01 y 0.1")
@@ -856,9 +863,10 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle,re
                                     cycle2,
                                     num_instrucciones=len(instructions_to_execute),
                                     hazard_unit_p1=hazard_unit_p1,
-                                    hazard_unit_p2=hazard_unit_p2
+                                    hazard_unit_p2=hazard_unit_p2,
+                                    metrics_p1=metrics_p1,
+                                    metrics_p2=metrics_p2
                                 )
-                                
                                 # Limpiar la cola solo después de que todas las instrucciones hayan terminado
                                 program_queue.clear()
                                 print("\nTodas las instrucciones han sido ejecutadas")
@@ -882,6 +890,7 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle,re
                 button["hover"] = button["rect"].collidepoint(mouse_pos)
         draw_interface(screen, font, pipeline, registers, memory,registers2, memory2, pipeline2, execute_cycle2, buttons, cycle, start_time)
         draw_input_box(screen, font, input_box, input_text, input_active)
+        draw_performance_metrics(screen, font, 880, 450, 400, 200,metrics_p1,metrics_p2)
         
         draw_mode_buttons(screen, font, mode_buttons, current_mode_p1,current_mode_p2)
         if hazard_unit_p1:
