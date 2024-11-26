@@ -415,117 +415,79 @@ def execute_pipeline_step(program, registers, memory, pipeline, program_counter,
         stage = stages[current_stage]
         print(f"\n---- Ejecutando etapa: {stage} ----")
 
-def execute_pipeline_step(program, registers, memory, pipeline, program_counter, current_stage):
+def execute_pipeline_step(program, registers, memory, pipeline, program_counter,
+                         registers2, memory2, pipeline2, program_counter2,
+                         execute_cycle, screen, font, buttons, cycle, start_time, cycle2,
+                         current_stage, hazard_unit_p1=None, hazard_unit_p2=None):
+    """
+    Ejecuta un paso del pipeline para ambos procesadores.
+    Retorna: (program_counter1, program_counter2, current_stage, is_finished)
+    """
     stages = ["IF", "ID", "EX", "MEM", "WB"]
+    
     if current_stage < len(stages):
         stage = stages[current_stage]
         print(f"\n---- Ejecutando etapa: {stage} ----")
+        
+        # Actualizar la interfaz antes de la ejecución
+        draw_interface(screen, font, pipeline, registers, memory,
+                      registers2, memory2, pipeline2, cycle2,
+                      buttons, cycle, start_time)
+        
+        # Mostrar estadísticas de las unidades de riesgos
+        y_pos = 180
+        if hazard_unit_p1:
+            stats_p1 = hazard_unit_p1.get_statistics()
+            for stat_name, value in stats_p1.items():
+                text = font.render(f"P1 {stat_name}: {value}", True, FONT_COLOR)
+                screen.blit(text, (WINDOW_WIDTH - 200, y_pos))
+                y_pos += 25
+        
+        if hazard_unit_p2:
+            stats_p2 = hazard_unit_p2.get_statistics()
+            for stat_name, value in stats_p2.items():
+                text = font.render(f"P2 {stat_name}: {value}", True, FONT_COLOR)
+                screen.blit(text, (WINDOW_WIDTH - 200, y_pos))
+                y_pos += 25
+        
+        pygame.display.flip()
 
-        if stage == "IF":
-            # Instruction Fetch (IF)
-            if pipeline["IF"] is None and program_counter < len(program):
-                pipeline["IF"] = program[program_counter]
-                pipeline["IF"]["delay"] = True  # Mantener en IF un ciclo
-                print(f"IF - Cargando instrucción: {pipeline['IF']}")
-                program_counter += 1
-
-            # Registrar el PC en un registro especial
-            registers[8] = program_counter
-
-            if pipeline["IF"] and "delay" in pipeline["IF"]:
-                del pipeline["IF"]["delay"]
-                print("IF - Delay eliminado, listo para mover a ID")
-            elif pipeline["IF"] and pipeline["ID"] is None:
-                pipeline["ID"] = pipeline["IF"]
-                print(f"IF - Pasando instrucción a ID: {pipeline['ID']}")
-                pipeline["IF"] = None
-
-        elif stage == "ID":
-            if pipeline["ID"]:
-                instr = pipeline["ID"]
-                pipeline["EX"] = instr
-                print(f"ID - Pasando a EX: {instr}")
-                pipeline["ID"] = None  # Limpiar ID
-
-        elif stage == "EX":
-            if pipeline["EX"]:
-                instr = pipeline["EX"]
-                if instr["opcode"] == "ADD":
-                    instr["result"] = registers[instr["src1"]] + registers[instr["src2"]]
-                    print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) + R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
-                elif instr["opcode"] == "SUB":
-                    instr["result"] = registers[instr["src1"]] - registers[instr["src2"]]
-                    print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) - R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
-                elif instr["opcode"] == "MUL":
-                    instr["result"] = registers[instr["src1"]] * registers[instr["src2"]]
-                    print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) * R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
-                elif instr["opcode"] == "DIV":
-                    instr["result"] = registers[instr["src1"]] // registers[instr["src2"]] if registers[instr["src2"]] != 0 else 0
-                    print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) / R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
-                elif instr["opcode"] == "MOD":
-                    instr["result"] = registers[instr["src1"]] % registers[instr["src2"]] if registers[instr["src2"]] != 0 else 0
-                    print(f"EX - Calculando: R{instr['src1']}({registers[instr['src1']]}) % R{instr['src2']}({registers[instr['src2']]}) = {instr['result']}")
-                elif instr["opcode"] == "BNE":
-                    if registers[instr["src1"]] != registers[instr["src2"]]:
-                        program_counter += instr["offset"]
-                        print(f"EX - BNE tomado, salto a la dirección {program_counter}.")
-                    else:
-                        print("EX - BNE no tomado.")
-                elif instr["opcode"] == "BEQ":
-                    if registers[instr["src1"]] == registers[instr["src2"]]:
-                        program_counter += instr["offset"]
-                        print(f"EX - BEQ tomado, salto a la dirección {program_counter}.")
-                    else:
-                        print("EX - BEQ no tomado.")
-                elif instr["opcode"] == "SWAP":
-                    registers[instr["dest"]], registers[instr["src1"]] = registers[instr["src1"]], registers[instr["dest"]]
-                    print(f"EX - SWAP: R{instr['dest']}({registers[instr['dest']]}) <-> R{instr['src1']}({registers[instr['src1']]})")
-                pipeline["MEM"] = instr
-                print(f"EX - Pasando a MEM: {instr}")
-                pipeline["EX"] = None  # Limpiar EX
-
-        elif stage == "MEM":
-            if pipeline["MEM"]:
-                instr = pipeline["MEM"]
-                if instr["opcode"] == "LOAD":
-                    value = memory[instr["src1"]]  # Obtener el valor en memoria
-                    instr["result"] = value
-                    memory[instr["src1"]] = 0  # Limpiar memoria después de cargar
-                    print(f"LOAD - Cargando desde memoria[{instr['src1']}] a R{instr['dest']}: {instr['result']}")
-                    print(f"LOAD - Memoria[{instr['src1']}] se ha puesto a 0")
-                elif instr["opcode"] == "STORE":
-                    memory[instr["dest"]] = registers[instr["src1"]]  # Guardar en memoria
-                    print(f"STORE - Guardando R{instr['src1']}({registers[instr['src1']]}) en memoria[{instr['dest']}]")
-                pipeline["WB"] = instr
-                print(f"MEM - Pasando a WB: {instr}")
-                pipeline["MEM"] = None  # Limpiar MEM después de pasar a WB
-
-        elif stage == "WB":
-            if pipeline["WB"]:
-                instr = pipeline["WB"]
-                if instr["opcode"] in ["ADD", "SUB", "MUL", "DIV", "MOD"]:
-                    registers[instr["dest"]] = instr["result"]
-                    print(f"WB - Escribiendo en R{instr['dest']}: {registers[instr['dest']]}")
-                elif instr["opcode"] == "LOAD":
-                    registers[instr["dest"]] = instr["result"]
-                    print(f"WB - Cargando desde memoria[{instr['src1']}] a R{instr['dest']}: {instr['result']}")
-                elif instr["opcode"] == "STORE":
-                    print(f"WB - STORE completado, no hay cambios en registros.")
-                elif instr["opcode"] == "SWAP":
-                    print(f"WB - SWAP completado entre R{instr['dest']} y R{instr['src1']}.")
-                pipeline["WB"] = None  # Limpiar la etapa WB
-
-        # Mostrar estado actual del pipeline
-        print_pipeline_state(pipeline, registers, memory, program_counter)
-    else:
-        print("\n--- Todas las etapas completadas ---")
-        print_pipeline_state(pipeline, registers, memory, program_counter)
-
-    if is_pipeline_empty(pipeline) and program_counter >= len(program):
-        print("\n--- Pipeline vacío y programa completado. ---")
-        return program_counter
-
-    return program_counter
+        # Ejecutar la etapa actual en ambos procesadores
+        if program_counter < len(program):
+            program_counter = execute_cycle(program, registers, memory, pipeline,
+                                         program_counter, hazard_unit_p1)
+        
+        if program_counter2 < len(program):
+            program_counter2 = execute_cycle(program, registers2, memory2, pipeline2,
+                                          program_counter2, hazard_unit_p2)
+        
+        # Mostrar estado de los pipelines
+        print("\nEstado Pipeline P1:")
+        for stage_name, instr in pipeline.items():
+            print(f"{stage_name}: {instr if instr else 'vacío'}")
+        
+        print("\nEstado Pipeline P2:")
+        for stage_name, instr in pipeline2.items():
+            print(f"{stage_name}: {instr if instr else 'vacío'}")
+        
+        # Actualizar la interfaz después de la ejecución
+        draw_interface(screen, font, pipeline, registers, memory,
+                      registers2, memory2, pipeline2, cycle2,
+                      buttons, cycle, start_time)
+        pygame.display.flip()
+        
+        # Incrementar la etapa actual
+        current_stage += 1
+        if current_stage >= len(stages):
+            current_stage = 0
+        
+        # Verificar si la ejecución ha terminado
+        is_finished = (is_pipeline_empty(pipeline) and is_pipeline_empty(pipeline2) and 
+                      program_counter >= len(program) and program_counter2 >= len(program))
+        
+        return program_counter, program_counter2, current_stage, is_finished
+    
+    return program_counter, program_counter2, 0, True
 
 def print_pipeline_state(pipeline, registers, memory, program_counter):
     """
@@ -563,26 +525,108 @@ def handle_text_input(event, input_text, input_active, input_box, mouse_pos):
     
     return input_text, input_active
 
-def execute_pipeline_with_timing(program, registers, memory, pipeline, execute_cycle, cycle_time,screen,font,buttons,start_time):
-    program_counter = 0
-    cycle = 0
-
-    while not is_pipeline_empty(pipeline) or program_counter < len(program):
-        for i in range(6):  # Seis ciclos para que la instrucción pase por todas las etapas
-            print(f"\nCiclo {cycle + i}")
-            # Mostrar el estado actualizado después de ejecutar el ciclo
-            draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
+def execute_pipeline_with_timing(program, registers, memory, pipeline, program_counter, 
+                            registers2, memory2, pipeline2, program_counter2,
+                            execute_cycle, screen, font, buttons, cycle, start_time, cycle2, 
+                            num_instrucciones, cycle_time=0.5, hazard_unit_p1=None, hazard_unit_p2=None):
+    """
+    Ejecuta el pipeline de forma segmentada para ambos procesadores simultáneamente.
+    Ahora incluye control de tiempo de ciclo.
+    """
+    def run_pipeline():
+        nonlocal program_counter, program_counter2
+        total_cycles = len(program) + 4 + num_instrucciones
+        
+        print(f"\nIniciando ejecución segmentada con {len(program)} instrucciones")
+        print(f"Ciclos totales necesarios: {total_cycles}")
+        print(f"Tiempo de ciclo: {cycle_time} segundos")
+        print(f"Modo P1: {'Con unidad de riesgos' if hazard_unit_p1 else 'Básico'}")
+        print(f"Modo P2: {'Con unidad de riesgos' if hazard_unit_p2 else 'Básico'}")
+        
+        execution_start_time = time.time()  # Tiempo inicial de ejecución
+        
+        for i in range(total_cycles):
+            cycle_start_time = time.time()  # Tiempo inicial del ciclo
+            print(f"\nCiclo global {i + 1} de {total_cycles}")
+            
+            # Actualizar la interfaz
+            draw_interface(screen, font, pipeline, registers, memory, 
+                         registers2, memory2, pipeline2, cycle2,
+                         buttons, cycle + i, start_time)
+            
+            # Mostrar estadísticas de las unidades de riesgos y tiempo
+            y_pos = 180
+            current_execution_time = time.time() - execution_start_time
+            time_text = font.render(f"Tiempo de ejecución: {current_execution_time:.2f}s", True, FONT_COLOR)
+            screen.blit(time_text, (WINDOW_WIDTH - 200, y_pos))
+            y_pos += 25
+            
+            if hazard_unit_p1:
+                stats_p1 = hazard_unit_p1.get_statistics()
+                for stat_name, value in stats_p1.items():
+                    text = font.render(f"P1 {stat_name}: {value}", True, FONT_COLOR)
+                    screen.blit(text, (WINDOW_WIDTH - 200, y_pos))
+                    y_pos += 25
+            
+            if hazard_unit_p2:
+                stats_p2 = hazard_unit_p2.get_statistics()
+                for stat_name, value in stats_p2.items():
+                    text = font.render(f"P2 {stat_name}: {value}", True, FONT_COLOR)
+                    screen.blit(text, (WINDOW_WIDTH - 200, y_pos))
+                    y_pos += 25
+            
             pygame.display.flip()
-            program_counter = execute_cycle(program, registers, memory, pipeline, program_counter)
-            print_pipeline_state(pipeline, registers, memory, program_counter)
-            # Mostrar el estado actualizado después de ejecutar el ciclo
-            draw_interface(screen, font, pipeline, registers, memory, buttons, cycle + i, start_time)
-            pygame.display.flip()
-            time.sleep(cycle_time)
-            cycle += 1
 
-    print("\n--- Simulación Finalizada ---")
-    print(f"Registros finales: {registers}")
+            # Ejecutar un ciclo en ambos procesadores
+            program_counter = execute_cycle(program, registers, memory, pipeline, 
+                                         program_counter, hazard_unit_p1)
+            program_counter2 = execute_cycle(program, registers2, memory2, pipeline2, 
+                                          program_counter2, hazard_unit_p2)
+            
+            # Mostrar estado actual de ambos pipelines
+            print("\nEstado del pipeline P1:")
+            for stage, instr in pipeline.items():
+                print(f"{stage}: {instr if instr else 'vacío'}")
+            
+            print("\nEstado del pipeline P2:")
+            for stage, instr in pipeline2.items():
+                print(f"{stage}: {instr if instr else 'vacío'}")
+            
+            # Actualizar la interfaz después del ciclo
+            draw_interface(screen, font, pipeline, registers, memory,
+                         registers2, memory2, pipeline2, cycle2,
+                         buttons, cycle + i, start_time)
+            
+            pygame.display.flip()
+            
+            # Verificar si ambos pipelines han terminado
+            if (is_pipeline_empty(pipeline) and is_pipeline_empty(pipeline2) and 
+                i >= len(program)):
+                print("Ambos pipelines vacíos y todas las instrucciones completadas")
+                break
+            
+            # Control preciso del tiempo de ciclo
+            cycle_elapsed = time.time() - cycle_start_time
+            if cycle_elapsed < cycle_time:
+                time.sleep(cycle_time - cycle_elapsed)
+
+        total_execution_time = time.time() - execution_start_time
+        print(f"\nEjecución segmentada completada después de {total_cycles} ciclos")
+        print(f"Tiempo total de ejecución: {total_execution_time:.2f} segundos")
+        print(f"Tiempo promedio por ciclo: {total_execution_time/total_cycles:.3f} segundos")
+        
+        if hazard_unit_p1:
+            print("\nEstadísticas finales P1:")
+            for stat_name, value in hazard_unit_p1.get_statistics().items():
+                print(f"{stat_name}: {value}")
+        if hazard_unit_p2:
+            print("\nEstadísticas finales P2:")
+            for stat_name, value in hazard_unit_p2.get_statistics().items():
+                print(f"{stat_name}: {value}")
+
+    pipeline_thread = threading.Thread(target=run_pipeline)
+    pipeline_thread.start()
+    pipeline_thread.join()
 
 def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle,registers2, memory2, pipeline2, execute_cycle2, buttons):
     global selected_instruction
@@ -721,29 +765,72 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle,re
                             else:
                                 print("Primero selecciona una instrucción")
                         elif button["label"] == "Step-by-Step":
-                            if selected_instruction:
-                                program_counter = execute_pipeline_step(
-                                    [selected_instruction], registers, memory, pipeline, 
-                                    program_counter, current_stage)
-                                program_queue.clear()  # Limpiar el programa después de la ejecución
-                                current_stage += 1
-                                if current_stage >= 6:
+                            if 0 < len(program_queue):
+                                instructions_to_execute = program_queue.copy()
+                                program_counter, program_counter2, current_stage, is_finished = execute_pipeline_step(
+                                    instructions_to_execute,
+                                    registers,
+                                    memory,
+                                    pipeline,
+                                    program_counter,
+                                    registers2,
+                                    memory2,
+                                    pipeline2,
+                                    program_counter2,
+                                    execute_cycle,
+                                    screen,
+                                    font,
+                                    buttons,
+                                    cycle,
+                                    start_time,
+                                    cycle2,
+                                    current_stage,
+                                    hazard_unit_p1,
+                                    hazard_unit_p2
+                                )
+                                
+                                if is_finished:
+                                    print("\nEjecución paso a paso completada")
+                                    program_queue.clear()
                                     current_stage = 0
-                                    selected_instruction = None
-                                    if is_pipeline_empty(pipeline):
-                                        program_counter = 0
-                                        pipeline = {stage: None for stage in stages}
+                                    # Reiniciar pipelines si es necesario
+                                    pipeline = {stage: None for stage in ["IF", "ID", "EX", "MEM", "WB"]}
+                                    pipeline2 = {stage: None for stage in ["IF", "ID", "EX", "MEM", "WB"]}
+                                    program_counter = 0
+                                    program_counter2 = 0
                             else:
-                                print("Primero selecciona una instrucción para Step-by-Step")
+                                print("Seleccione al menos una instrucción para ejecutar")
                         elif button["label"] == "En tiempo":
-                            if 0.01 <= cycle_time <= 0.1 and selected_instruction:
-                                execute_pipeline_with_timing(
-                                    [selected_instruction], registers, memory, pipeline, execute_cycle, cycle_time,screen,
-                                    font,buttons,start_time)
-                                selected_instruction = None
-                                program_queue.clear()  # Limpiar el programa después de la ejecución
+                            if 0 < len(program_queue):
+                                print(f"\nIniciando ejecución en tiempo con {len(program_queue)} instrucciones")
+                                instructions_to_execute = program_queue.copy()
+                                if 0.01 <= cycle_time <= 0.1:
+                                    execute_pipeline_with_timing(
+                                                    instructions_to_execute,
+                                                    registers, 
+                                                    memory, 
+                                                    pipeline, 
+                                                    program_counter,
+                                                    registers2,
+                                                    memory2,
+                                                    pipeline2,
+                                                    program_counter2,
+                                                    execute_cycle, 
+                                                    screen, 
+                                                    font, 
+                                                    buttons, 
+                                                    cycle, 
+                                                    start_time,
+                                                    cycle2,
+                                                    num_instrucciones=len(instructions_to_execute),
+                                                    cycle_time=cycle_time,  # Añadido el parámetro de tiempo
+                                                    hazard_unit_p1=hazard_unit_p1,
+                                                    hazard_unit_p2=hazard_unit_p2)
+                                    program_queue.clear()  # Limpiar el programa después de la ejecución
+                                else:
+                                    print("Tiempo inválido debe estar entre 0.01 y 0.1")
                             else:
-                                print("Tiempo inválido o no hay instrucción seleccionada")
+                                print("Seleccione al menos una instrucción para ejecutar")
                         elif button["label"] == "Completa":
                             if 0 < len(program_queue):
                                 print(f"\nIniciando ejecución segmentada con {len(program_queue)} instrucciones")
