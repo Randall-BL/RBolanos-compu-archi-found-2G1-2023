@@ -20,7 +20,7 @@ BUTTON_HOVER_COLOR = (150, 150, 255)
 BUTTON_TEXT_COLOR = (255, 255, 255)
 
 # Constantes del tamaño de los botones
-MODE_BUTTON_WIDTH = 200
+MODE_BUTTON_WIDTH = 130
 MODE_BUTTON_HEIGHT = 30
 MODE_BUTTON_COLOR = (100, 100, 255)
 MODE_BUTTON_HOVER_COLOR = (150, 150, 255)
@@ -450,25 +450,25 @@ def visualize_with_pygame(program, registers, memory, pipeline, execute_cycle, b
     mode_buttons = [
         {
             "label": "Modo Básico",
-            "rect": pygame.Rect(WINDOW_WIDTH - 220, 10, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
+            "rect": pygame.Rect(WINDOW_WIDTH - 160, 100, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
             "hazard_config": None,
             "hover": False
         },
         {
             "label": "Con Forwarding",
-            "rect": pygame.Rect(WINDOW_WIDTH - 220, 50, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
+            "rect": pygame.Rect(WINDOW_WIDTH - 160, 135, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
             "hazard_config": {"forwarding": True, "prediction": False},
             "hover": False
         },
         {
             "label": "Con Predicción",
-            "rect": pygame.Rect(WINDOW_WIDTH - 220, 90, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
+            "rect": pygame.Rect(WINDOW_WIDTH - 20, 100, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
             "hazard_config": {"forwarding": False, "prediction": True},
             "hover": False
         },
         {
             "label": "Modo Completo",
-            "rect": pygame.Rect(WINDOW_WIDTH - 220, 130, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
+            "rect": pygame.Rect(WINDOW_WIDTH - 20, 135, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT),
             "hazard_config": {"forwarding": True, "prediction": True},
             "hover": False
         }

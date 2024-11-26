@@ -153,24 +153,36 @@ def execute_cycle(program, registers, memory, pipeline, program_counter, hazard_
                 instr["result"] = registers[instr["src1"]] % registers[instr["src2"]] if registers[instr["src2"]] != 0 else 0
 
         # Manejo de saltos con predicción si está habilitada
+        # Manejo de saltos
         if instr["opcode"] in ["BEQ", "BNE"]:
+            # Obtener valores de registros, usando forwarding si está disponible
+            if hazard_unit and hazard_unit.forwarding_enabled:
+                src1_val = instr.get('forward_src1', registers[instr["src1"]])
+                src2_val = instr.get('forward_src2', registers[instr["src2"]])
+            else:
+                src1_val = registers[instr["src1"]]
+                src2_val = registers[instr["src2"]]
+
+            # Evaluar condición de salto
             taken = False
             if instr["opcode"] == "BEQ":
-                taken = registers[instr["src1"]] == registers[instr["src2"]]
+                taken = (src1_val == src2_val)
             elif instr["opcode"] == "BNE":
-                taken = registers[instr["src1"]] != registers[instr["src2"]]
+                taken = (src1_val != src2_val)
 
             if taken:
-                if hazard_unit and hazard_unit.branch_prediction_enabled:
-                    if not hazard_unit.last_prediction:
-                        # Predicción incorrecta
-                        program_counter += instr["offset"]
-                        hazard_unit.flush_pipeline(pipeline)
-                else:
-                    program_counter += instr["offset"]
-                print(f"EX - {instr['opcode']} tomado, salto a la dirección {program_counter}.")
+                print(f"EX - {instr['opcode']} tomado, salto a la dirección {program_counter + instr['offset']}.")
+                program_counter += instr["offset"]
             else:
                 print(f"EX - {instr['opcode']} no tomado.")
+
+            # Actualizar predicción si está habilitada
+            if hazard_unit and hazard_unit.branch_prediction_enabled:
+                hazard_unit.update_branch_prediction(taken)
+                
+            pipeline["MEM"] = instr
+            pipeline["EX"] = None
+            print(f"EX - Pasando a MEM: {instr}")
 
         elif instr["opcode"] == "SWAP":
             registers[instr["dest"]], registers[instr["src1"]] = registers[instr["src1"]], registers[instr["dest"]]

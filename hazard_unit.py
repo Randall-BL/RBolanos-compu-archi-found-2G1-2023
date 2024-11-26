@@ -1,5 +1,3 @@
-# hazard_unit.py
-
 class HazardType:
     RAW = "Read After Write"
     WAW = "Write After Write"
@@ -31,6 +29,43 @@ class Hazard_Unit:
         self.forwarding_source = None
         self.forwarding_dest = None
         self.last_prediction = False
+        self.branch_history = {}
+
+    def predict_branch(self, instruction):
+        """
+        Predice si un salto será tomado o no.
+        """
+        if not self.branch_prediction_enabled or not instruction:
+            return False
+
+        if instruction['opcode'] not in ['BEQ', 'BNE']:
+            return False
+
+        prediction = True  # Predicción simple: siempre predice tomado
+        self.last_prediction = prediction
+        return prediction
+
+    def update_branch_prediction(self, actual_result):
+        """
+        Actualiza las estadísticas de predicción
+        """
+        if self.last_prediction is not None:
+            if self.last_prediction == actual_result:
+                self.stats['correct_predictions'] += 1
+                print("Predicción correcta")
+            else:
+                self.stats['incorrect_predictions'] += 1
+                print("Predicción incorrecta")
+        self.last_prediction = None
+
+    def flush_pipeline(self, pipeline):
+        """
+        Limpia el pipeline cuando hay una predicción incorrecta
+        """
+        pipeline["IF"] = None
+        pipeline["ID"] = None
+        self.stats['control_hazards'] += 1
+        print("Pipeline flushed debido a predicción incorrecta")
 
     def check_data_hazards(self, pipeline):
         """
@@ -41,6 +76,7 @@ class Hazard_Unit:
 
         ex_instr = pipeline['EX']
         id_instr = pipeline['ID']
+        hazard_detected = False
 
         # Verificar RAW (Read After Write)
         if 'dest' in ex_instr:
@@ -48,20 +84,20 @@ class Hazard_Unit:
                ('src2' in id_instr and id_instr['src2'] == ex_instr['dest']):
                 self.current_hazard = HazardType.RAW
                 self.stats["raw_hazards"] += 1
-                return True
+                hazard_detected = True
 
         # Verificar WAW (Write After Write)
         if 'dest' in ex_instr and 'dest' in id_instr:
             if ex_instr['dest'] == id_instr['dest']:
                 self.current_hazard = HazardType.WAW
                 self.stats["waw_hazards"] += 1
-                return True
+                hazard_detected = True
 
-        return False
+        return hazard_detected
 
     def check_control_hazards(self, pipeline):
         """
-        Detecta riesgos de control (saltos)
+        Detecta riesgos de control
         """
         if not pipeline['EX']:
             return False
@@ -77,54 +113,73 @@ class Hazard_Unit:
         """
         Maneja los riesgos detectados según la configuración
         """
+        hazard_detected = False
+
+        # Si hay forwarding habilitado, intentar primero eso
+        if self.forwarding_enabled:
+            if self.handle_forwarding(pipeline):
+                return False  # No necesitamos stall si el forwarding funciona
+
+        # Verificar riesgos de datos
         if self.check_data_hazards(pipeline):
-            if self.forwarding_enabled:
-                return self.handle_forwarding(pipeline)
-            else:
+            hazard_detected = True
+            if not self.forwarding_enabled:
                 self.stall_pipeline = True
                 self.stats["stalls"] += 1
-                return True
 
-        if self.check_control_hazards(pipeline):
-            if self.branch_prediction_enabled:
-                return self.handle_branch_prediction(pipeline)
-            else:
-                self.stall_pipeline = True
-                self.stats["stalls"] += 1
-                return True
+        # Verificar riesgos de control solo si no hay predicción
+        if not self.branch_prediction_enabled and self.check_control_hazards(pipeline):
+            hazard_detected = True
+            self.stall_pipeline = True
+            self.stats["stalls"] += 1
 
-        self.stall_pipeline = False
-        self.current_hazard = None
-        return False
+        if not hazard_detected:
+            self.stall_pipeline = False
+            self.current_hazard = None
+
+        return hazard_detected
 
     def handle_forwarding(self, pipeline):
         """
         Implementa el forwarding de datos
         """
-        if not pipeline['EX'] or not pipeline['ID']:
+        if not self.forwarding_enabled or not pipeline['ID']:
             return False
 
-        ex_instr = pipeline['EX']
+        forwarding_performed = False
         id_instr = pipeline['ID']
 
-        if 'result' in ex_instr:
-            if 'src1' in id_instr and id_instr['src1'] == ex_instr['dest']:
-                self.forwarding_source = f"EX.result"
-                self.forwarding_dest = f"ID.src1"
+        # Forwarding desde EX
+        if pipeline['EX'] and 'result' in pipeline['EX']:
+            ex_instr = pipeline['EX']
+            if 'src1' in id_instr and id_instr['src1'] == ex_instr.get('dest'):
                 id_instr['forward_src1'] = ex_instr['result']
-                return True
+                print(f"Forwarding: EX.result -> ID.src1 (R{ex_instr['dest']})")
+                forwarding_performed = True
 
-            if 'src2' in id_instr and id_instr['src2'] == ex_instr['dest']:
-                self.forwarding_source = f"EX.result"
-                self.forwarding_dest = f"ID.src2"
+            if 'src2' in id_instr and id_instr['src2'] == ex_instr.get('dest'):
                 id_instr['forward_src2'] = ex_instr['result']
-                return True
+                print(f"Forwarding: EX.result -> ID.src2 (R{ex_instr['dest']})")
+                forwarding_performed = True
 
-        return False
+        # Forwarding desde MEM
+        if pipeline['MEM'] and 'result' in pipeline['MEM']:
+            mem_instr = pipeline['MEM']
+            if 'src1' in id_instr and id_instr['src1'] == mem_instr.get('dest'):
+                id_instr['forward_src1'] = mem_instr['result']
+                print(f"Forwarding: MEM.result -> ID.src1 (R{mem_instr['dest']})")
+                forwarding_performed = True
+
+            if 'src2' in id_instr and id_instr['src2'] == mem_instr.get('dest'):
+                id_instr['forward_src2'] = mem_instr['result']
+                print(f"Forwarding: MEM.result -> ID.src2 (R{mem_instr['dest']})")
+                forwarding_performed = True
+
+        return forwarding_performed
 
     def handle_branch_prediction(self, pipeline):
         """
-        Implementa la predicción de saltos
+        Maneja la predicción de saltos
         """
         if not pipeline['EX']:
             return False
@@ -133,35 +188,25 @@ class Hazard_Unit:
         if ex_instr['opcode'] not in ['BEQ', 'BNE']:
             return False
 
-        # Predicción simple: predecir no tomado
-        prediction = False
-        self.last_prediction = prediction
-
-        # Verificar si la predicción fue correcta
+        prediction = self.last_prediction
         actual_taken = False
+
         if ex_instr['opcode'] == 'BEQ':
             actual_taken = (ex_instr['src1'] == ex_instr['src2'])
         elif ex_instr['opcode'] == 'BNE':
             actual_taken = (ex_instr['src1'] != ex_instr['src2'])
 
-        if prediction == actual_taken:
-            self.stats["correct_predictions"] += 1
-        else:
-            self.stats["incorrect_predictions"] += 1
+        self.update_branch_prediction(actual_taken)
+        
+        if prediction != actual_taken:
             self.flush_pipeline(pipeline)
+            return True
 
-        return True
-
-    def flush_pipeline(self, pipeline):
-        """
-        Limpia el pipeline después de una predicción incorrecta
-        """
-        pipeline['IF'] = None
-        pipeline['ID'] = None
+        return False
 
     def get_statistics(self):
         """
-        Retorna las estadísticas actuales
+        Retorna las estadísticas
         """
         return self.stats
 
