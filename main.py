@@ -12,6 +12,11 @@ def main():
     memory = initialize_memory()  # Inicializar memoria
     pipeline, program_counter = initialize_pipeline()  # Inicializar pipeline
 
+    registers2 = initialize_registers()  # Inicializar registros
+    memory2 = initialize_memory()  # Inicializar memoria
+    pipeline2, program_counter = initialize_pipeline()  # Inicializar pipeline
+    execute_cycle2 = execute_cycle
+
     # Botones con instrucciones
     buttons = [
         {"label": "ADD", "instruction": {"opcode": "ADD", "dest": 1, "src1": 2, "src2": 3}, "hover": False},
@@ -33,7 +38,7 @@ def main():
         # Simulación con visualización interactiva
         print("\nIniciando simulación con visualización interactiva...\n")
         visualize_with_pygame(
-            program, registers, memory, pipeline, execute_cycle, buttons
+            program, registers, memory, pipeline, execute_cycle,registers2, memory2, pipeline2, execute_cycle2,buttons
         )
     else:
         # Simulación segmentada para pruebas
